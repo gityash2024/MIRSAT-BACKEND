@@ -1,64 +1,58 @@
-# MIRSAT Portal - Frontend
+# MIRSAT Portal - Backend
 
 ## Project Overview
 
-MIRSAT Portal frontend is a React-based web application built with TypeScript and Vite, providing a comprehensive interface for task management, inspection handling, and user administration.
+The MIRSAT Portal backend is a Node.js/Express application built with TypeScript that provides API services for task management, user authentication, and inspection report handling.
 
 ## Architecture Overview
 
 ```mermaid
 graph TD
-    A[Web Browser] --> B[React Application]
-    B --> C[Redux Store]
-    B --> D[React Router]
+    A[Client Applications] -->|HTTP/REST| B[API Gateway]
+    B --> C[Authentication Service]
+    B --> D[Task Management Service]
+    B --> E[User Management Service]
+    B --> F[File Upload Service]
     
-    C --> E[Auth Slice]
-    C --> F[Task Slice]
-    C --> G[User Slice]
+    C --> G[MongoDB - Users]
+    D --> H[MongoDB - Tasks]
+    F --> I[Cloudinary - Files]
     
-    B --> H[API Service]
-    H --> I[Backend API]
-    
-    J[Components] --> B
-    K[Pages] --> B
-    L[Hooks] --> B
+    J[Redis - Cache] --> B
+    K[Socket.io - Real-time] --> B
 ```
 
 ## Technology Stack
-- React 18+
-- TypeScript 5+
-- Vite 4+
-- Redux Toolkit
-- React Router 6+
-- Material-UI (MUI)
-- Tailwind CSS
-- React Query (optional)
+- Node.js v18+
+- TypeScript v5+
+- Express.js v4+
+- MongoDB v5+
+- JWT for authentication
+- Socket.io for real-time updates
+- Cloudinary for file storage
+- Redis for caching (optional)
 
 ## Project Structure
 ```
-mirsat-frontend/
+mirsat-backend/
 ├── src/
-│   ├── components/     # Reusable components
-│   │   ├── common/
-│   │   ├── layout/
-│   │   └── features/
-│   ├── pages/         # Route components
-│   ├── store/         # Redux store setup
-│   │   └── slices/    # Redux slices
-│   ├── services/      # API services
-│   ├── hooks/         # Custom hooks
-│   ├── utils/         # Utility functions
-│   ├── types/         # TypeScript types
-│   ├── styles/        # Global styles
-│   ├── App.tsx
-│   └── main.tsx
-├── public/           # Static files
-├── .env.example
-├── index.html
+│   ├── config/         # Configuration files
+│   ├── controllers/    # Request handlers
+│   ├── middleware/     # Custom middleware
+│   ├── models/         # Database models
+│   ├── routes/         # API routes
+│   ├── services/       # Business logic
+│   ├── types/          # TypeScript types/interfaces
+│   ├── utils/          # Utility functions
+│   ├── validations/    # Request validation schemas
+│   ├── app.ts         # Express app setup
+│   └── server.ts      # Entry point
+├── tests/             # Test files
+├── logs/              # Application logs
+├── .env.example       # Environment variables template
+├── .gitignore
 ├── package.json
-├── tailwind.config.js
 ├── tsconfig.json
-├── vite.config.ts
 └── README.md
 ```
 
@@ -66,15 +60,16 @@ mirsat-frontend/
 
 ### Prerequisites
 - Node.js (v18 or higher)
+- MongoDB (v5 or higher)
 - npm or yarn
-- Modern web browser
+- TypeScript
 
 ### Installation
 
 1. Clone the repository:
 ```bash
 git clone https://github.com/your-org/mirsat-portal.git
-cd mirsat-frontend
+cd mirsat-backend
 ```
 
 2. Install dependencies:
@@ -89,8 +84,14 @@ cp .env.example .env
 
 4. Update environment variables in `.env`:
 ```env
-VITE_API_URL=http://localhost:5000/api/v1
-VITE_SOCKET_URL=http://localhost:5000
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/mirsat
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRE=24h
+NODE_ENV=development
+CLOUDINARY_NAME=your_cloudinary_name
+CLOUDINARY_API_KEY=your_key
+CLOUDINARY_API_SECRET=your_secret
 ```
 
 5. Start development server:
@@ -98,110 +99,71 @@ VITE_SOCKET_URL=http://localhost:5000
 npm run dev
 ```
 
-## Features
+## API Endpoints
 
-### Role-Based Access Control
+### Authentication
+- POST `/api/v1/auth/register` - Register new user
+- POST `/api/v1/auth/login` - User login
+- POST `/api/v1/auth/forgot-password` - Request password reset
+- POST `/api/v1/auth/reset-password` - Reset password
+
+### Users
+- GET `/api/v1/users` - Get all users
+- POST `/api/v1/users` - Create user
+- GET `/api/v1/users/:id` - Get user by ID
+- PUT `/api/v1/users/:id` - Update user
+- DELETE `/api/v1/users/:id` - Delete user
+
+### Tasks
+- GET `/api/v1/tasks` - Get all tasks
+- POST `/api/v1/tasks` - Create task
+- GET `/api/v1/tasks/:id` - Get task by ID
+- PUT `/api/v1/tasks/:id` - Update task
+- DELETE `/api/v1/tasks/:id` - Delete task
+- POST `/api/v1/tasks/:id/photos` - Upload task photos
+
+## Core Features
+
+### User Roles & Permissions
 ```typescript
-type UserRole = 'admin' | 'management' | 'inspector';
+enum UserRole {
+  ADMIN = 'admin',
+  MANAGEMENT = 'management',
+  INSPECTOR = 'inspector'
+}
 
 interface Permission {
-  route: string;
-  actions: ('create' | 'read' | 'update' | 'delete')[];
+  create: boolean;
+  read: boolean;
+  update: boolean;
+  delete: boolean;
 }
 ```
 
-### Component Examples
-
-#### Permission Gate Component:
-```tsx
-const PermissionGate: React.FC<{
-  permission: string;
-  children: React.ReactNode;
-}> = ({ permission, children }) => {
-  const hasPermission = usePermission(permission);
-  return hasPermission ? <>{children}</> : null;
-};
-```
-
-#### Task Creation:
-```tsx
-const CreateTaskButton: React.FC = () => {
-  return (
-    <PermissionGate permission="create_task">
-      <Button
-        variant="contained"
-        startIcon={<AddIcon />}
-        onClick={handleCreateTask}
-      >
-        Create Task
-      </Button>
-    </PermissionGate>
-  );
-};
-```
-
-## User Interface
-
-### Pages
-- Login/Register
-- Dashboard
-- Task Management
-- User Administration
-- Reports & Analytics
-- Profile Settings
-
-### Components
-- Navigation
-- Data Tables
-- Forms
-- Modals
-- Charts
-- File Upload
-
-## State Management
-
-### Redux Store Structure
+### Task Management
 ```typescript
-interface RootState {
-  auth: AuthState;
-  tasks: TaskState;
-  users: UserState;
-  ui: UIState;
-}
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  loading: boolean;
-  error: string | null;
+interface Task {
+  title: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'incomplete';
+  assignedTo: string;
+  priority: 'low' | 'medium' | 'high';
+  deadline: Date;
+  photos: string[];
 }
 ```
 
-### API Integration
-```typescript
-// services/api.ts
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-// Add auth token
-api.interceptors.request.use((config) => {
-  const token = store.getState().auth.token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-```
+### File Upload
+- Supports image uploads
+- Files stored in Cloudinary
+- Automatic image optimization
+- Secure file handling
 
 ## Available Scripts
 ```bash
 npm run dev          # Start development server
 npm run build        # Build for production
-npm run preview     # Preview production build
+npm start           # Run production server
 npm run lint        # Run ESLint
 npm run lint:fix    # Fix ESLint errors
 npm test           # Run tests
@@ -216,36 +178,36 @@ npm test
 npm run test:coverage
 
 # Run specific test file
-npm test -- src/components/Task.test.tsx
+npm test -- tests/auth.test.ts
 ```
 
-## Styling
-- Tailwind CSS for utility classes
-- MUI components for base UI
-- CSS modules for component-specific styles
-- Theme customization
-
-## Performance Optimization
-- Code splitting
-- Lazy loading
-- Memoization
-- Image optimization
-- Bundle size optimization
+## Security Features
+- JWT Authentication
+- Rate Limiting
+- CORS Protection
+- Helmet Security Headers
+- Password Hashing
+- Request Validation
 
 ## Error Handling
 ```typescript
-const ErrorBoundary: React.FC<{ children: React.ReactNode }> = ({
-  children
-}) => {
-  const [hasError, setHasError] = useState(false);
-
-  if (hasError) {
-    return <ErrorPage />;
+class ApiError extends Error {
+  statusCode: number;
+  status: string;
+  
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
   }
-
-  return <>{children}</>;
-};
+}
 ```
+
+## Logging
+- Winston logger integration
+- Error tracking
+- Request logging
+- Performance monitoring
 
 ## Contributing
 1. Fork the repository
@@ -260,18 +222,23 @@ const ErrorBoundary: React.FC<{ children: React.ReactNode }> = ({
 npm run build
 ```
 
-2. Test the production build:
-```bash
-npm run preview
+2. Set production environment variables:
+```env
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=your_production_mongodb_uri
 ```
 
-3. Deploy the `dist` folder to your hosting service
+3. Start the server:
+```bash
+npm start
+```
 
-## Browser Support
-- Chrome (last 2 versions)
-- Firefox (last 2 versions)
-- Safari (last 2 versions)
-- Edge (last 2 versions)
+## Monitoring & Maintenance
+- Use PM2 for process management
+- Monitor server resources
+- Regular database backups
+- Error tracking with Winston
 
 ## License
 MIT License - see LICENSE.md
