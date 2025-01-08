@@ -1,18 +1,37 @@
-// src/routes/user.routes.ts
-import express from 'express';
-import { userController } from '../controllers/user.controller';
-import { auth } from '../middleware/auth.middleware';
+import { Router } from 'express';
+import { protect, authorize } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validate.middleware';
+import { userValidation } from '../validations/user.validation';
+import {
+  createUser,
+  getUsers,
+  getUser,
+  updateUser,
+  deleteUser,
+  getUserProfile,
+  updatePassword,
+} from '../controllers/user.controller';
 
-const router = express.Router();
+const router = Router();
 
-router.use(auth);
-router.route('/')
-  .get(userController.getUsers)
-  .post(userController.createUser);
+router.use(protect);
 
-router.route('/:id')
-  .get(userController.getUser)
-  .put(userController.updateUser)
-  .delete(userController.deleteUser);
+// Profile routes
+router.get('/profile', getUserProfile);
+router.put('/update-password', validate(userValidation.updatePassword), updatePassword);
+
+// Admin only routes
+router.use(authorize('admin'));
+
+router
+  .route('/')
+  .post(validate(userValidation.createUser), createUser)
+  .get(getUsers);
+
+router
+  .route('/:id')
+  .get(getUser)
+  .put(validate(userValidation.updateUser), updateUser)
+  .delete(deleteUser);
 
 export default router;

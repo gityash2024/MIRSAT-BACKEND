@@ -1,94 +1,150 @@
-// src/controllers/auth.controller.ts
-import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
+import { User } from '../models/User';
+import { emailService } from '../services/email.service';
 import { catchAsync } from '../utils/catchAsync';
-import ApiError from '../utils/ApiError';
-import { UserModel, IUser } from '../models/User';
+import jwt from 'jsonwebtoken';
+import {ApiError} from '../utils/ApiError';
 
-interface TokenPayload {
-  id: string;
-}
 
-const generateToken = (id: string): string => {
+const generateToken = (id: any): any => {
   if (!process.env.JWT_SECRET) {
-    throw new Error('JWT secret is not defined');
+    throw new Error('JWT_SECRET is not defined');
   }
-  return jwt.sign({ id } as TokenPayload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '24h'
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d'; // Default to 7 day if not specified
+
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: expiresIn
   });
 };
 
-export const authController = {
-  register: catchAsync(async (req: Request, res: Response) => {
-    const { firstName, lastName, email, password, role } = req.body;
+export const register = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { name, email, password, role } = req.body;
 
-    const userExists = await UserModel.findOne({ email });
-    if (userExists) {
-      throw new ApiError(400, 'User already exists');
-    }
 
-    const user = await UserModel.create({
-      firstName,
-      lastName,
-      email,
-      password,
-      role
-    });
+  // Check if email already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return next(new ApiError('Email already registered', 400));
+  }
 
-    const token = generateToken(user._id.toString());
-    const userResponse = user.toJSON();
+  // Create user
+  const user = await User.create({
+    name,
+    email,
+    password,
+    role,
+    createdBy: req?.user?._id,
+  });
 
-    res.status(201).json({
-      status: 'success',
-      data: {
-        user: userResponse,
-        token
-      }
-    });
-  }),
+  // Send welcome email
+  await emailService.sendWelcomeEmail(email, name);
 
-  login: catchAsync(async (req: Request, res: Response) => {
-    const { email, password } = req.body;
+  // Generate token
+  const token = generateToken(user._id);
 
-    if (!email || !password) {
-      throw new ApiError(400, 'Please provide email and password');
-    }
+  res.status(201).json({
+    success: true,
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  });
+});
 
-    const user = await UserModel.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
-      throw new ApiError(401, 'Incorrect email or password');
-    }
+export const login = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { email, password } = req.body;
 
-    const token = generateToken(user._id.toString());
-    const userResponse = user.toJSON();
+  const user = await User.findOne({ email }).select('+password');
+
+  if (!user || !(await user.comparePassword(password))) {
+    return next(new ApiError('Invalid credentials', 401));
+  }
+
+  if (!user.isActive) {
+    return next(new ApiError('Your account has been deactivated', 401));
+  }
+
+  // Update last login
+  user.lastLogin = new Date();
+  await user.save();
+
+  const token = generateToken(user._id);
+
+  res.status(200).json({
+    success: true,
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  });
+});
+
+export const forgotPassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return next(new ApiError('No user found with this email', 404));
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  user.passwordResetToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  user.passwordResetExpires = new Date(Date.now() + 3600000); // 1 hour
+  await user.save();
+
+  try {
+    await emailService.sendPasswordResetEmail(email, resetToken);
 
     res.status(200).json({
-      status: 'success',
-      data: {
-        user: userResponse,
-        token
-      }
+      success: true,
+      message: 'Password reset email sent',
     });
-  }),
+  } catch (error) {
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
 
-  forgotPassword: catchAsync(async (req: Request, res: Response) => {
-    const { email } = req.body;
+    return next(new ApiError('Error sending email', 500));
+  }
+});
 
-    const user = await UserModel.findOne({ email });
-    if (!user) {
-      throw new ApiError(404, 'User not found');
-    }
+export const resetPassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { token, password } = req.body;
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Password reset instructions sent to email'
-    });
-  }),
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
 
-  resetPassword: catchAsync(async (req: Request, res: Response) => {
-    res.status(200).json({
-      status: 'success',
-      message: 'Password reset successful'
-    });
-  })
-};
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return next(new ApiError('Invalid or expired reset token', 400));
+  }
+
+  user.password = password;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful',
+  });
+});

@@ -5,7 +5,7 @@ class ApiError extends Error implements IApiError {
   status: string;
   isOperational: boolean;
 
-  constructor(statusCode: number, message: string) {
+  constructor(statusCode: any, message: any) {
     super(message);
     this.statusCode = statusCode;
     this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
@@ -15,4 +15,4 @@ class ApiError extends Error implements IApiError {
   }
 }
 
-export default ApiError;
+export { ApiError };

@@ -1,15 +1,58 @@
-import express from 'express';
-import { taskController } from '../controllers/task.controller';
-import { auth } from '../middleware/auth.middleware';
+import { Router } from 'express';
+import { protect, authorize, hasPermission } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validate.middleware';
+import { taskValidation } from '../validations/task.validation';
+import { upload } from '../services/upload.service';
+import {
+  createTask,
+  getTasks,
+  getTask,
+  updateTask,
+  updateTaskStatus,
+  addTaskComment,
+  uploadTaskAttachment,
+} from '../controllers/task.controller';
 
-const router = express.Router();
+const router = Router();
 
-router.use(auth);
+router.use(protect);
 
-router.get('/', taskController.getTasks);
-router.post('/', taskController.createTask);
-router.get('/:id', taskController.getTask);
-router.put('/:id', taskController.updateTask);
-router.delete('/:id', taskController.deleteTask);
+router
+  .route('/')
+  .post(
+    authorize('admin', 'manager'),
+    hasPermission('create_task'),
+    validate(taskValidation.createTask),
+    createTask
+  )
+  .get(getTasks);
+
+router
+  .route('/:id')
+  .get(getTask)
+  .put(
+    authorize('admin', 'manager'),
+    hasPermission('edit_task'),
+    validate(taskValidation.updateTask),
+    updateTask
+  );
+
+router.put(
+  '/:id/status',
+  validate(taskValidation.updateStatus),
+  updateTaskStatus
+);
+
+router.post(
+  '/:id/comments',
+  validate(taskValidation.addComment),
+  addTaskComment
+);
+
+router.post(
+  '/:id/attachments',
+  upload.single('file'),
+  uploadTaskAttachment
+);
 
 export default router;

@@ -1,80 +1,98 @@
-// src/models/User.ts
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
-  _id: mongoose.Schema.Types.ObjectId;
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
-  password?: string;
-  role: 'admin' | 'management' | 'inspector';
-  status: 'active' | 'inactive' | 'blocked';
+  password: string;
+  role: string;
   permissions: string[];
+  isActive: boolean;
+  lastLogin?: Date;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
+  createdBy?: Schema.Types.ObjectId;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-const userSchema = new Schema<IUser>({
-  firstName: {
-    type: String,
-    required: [true, 'First name is required'],
-    trim: true
-  },
-  lastName: {
-    type: String,
-    required: [true, 'Last name is required'],
-    trim: true
-  },
-  email: {
-    type: String,
-    required: [true, 'Email is required'],
-    unique: true,
-    trim: true,
-    lowercase: true
-  },
-  password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: 8,
-    select: false
-  },
-  role: {
-    type: String,
-    enum: ['admin', 'management', 'inspector'],
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'blocked'],
-    default: 'active'
-  },
-  permissions: [{
-    type: String
-  }]
-}, {
-  timestamps: true,
-  toJSON: { 
-    transform: function(doc, ret) {
-      delete ret.password;
-      return ret;
+const userSchema = new Schema<IUser>(
+  {
+    name: {
+      type: String,
+      required: [true, 'Name is required'],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, 'Email is required'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: [true, 'Password is required'],
+      minlength: 8,
+      select: false,
+    },
+    role: {
+      type: String,
+      required: true,
+      enum: ['admin', 'manager', 'inspector'],
+      default: 'inspector',
+    },
+    permissions: [{
+      type: String,
+      enum: [
+        'create_task',
+        'edit_task',
+        'delete_task',
+        'view_task',
+        'manage_users',
+        'generate_reports',
+        'manage_calendar',
+        'configure_notifications'
+      ]
+    }],
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLogin: {
+      type: Date,
+    },
+    passwordResetToken: String,
+    passwordResetExpires: Date,
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     }
+  },
+  {
+    timestamps: true,
   }
-});
+);
 
+// Password hashing middleware
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
     const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password as string, salt);
+    this.password = await bcrypt.hash(this.password, salt);
     next();
-  } catch (error) {
-    next(error as Error);
+  } catch (error: any) {
+    next(error);
   }
 });
 
+// Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-  return bcrypt.compare(candidatePassword, this.password as string);
+  try {
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    return false;
+  }
 };
 
-export const UserModel = mongoose.model<IUser>('User', userSchema);
+export const User = mongoose.model<IUser>('User', userSchema);

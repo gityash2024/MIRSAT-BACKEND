@@ -2,16 +2,20 @@ import 'dotenv/config';
 import app from './app';
 import connectDB from './config/database';
 import { logger } from './utils/logger';
+import { createServer } from 'http';
+import { socketService } from './services/socket.service';
+const httpServer = createServer(app);
+socketService.initialize(httpServer);
 
 const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB
-connectDB()
-  .then(() => {
-    app.listen(PORT, () => {
-      logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    });
-  })
+
+connectDB().then(() => {
+  httpServer.listen(PORT, () => {
+    logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  });
+})
   .catch((error) => {
     logger.error('Database connection failed', error);
     process.exit(1);

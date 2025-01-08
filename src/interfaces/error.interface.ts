@@ -1,5 +1,24 @@
-export interface IApiError extends Error {
+export interface IErrorResponse {
+  success: boolean;
+  error: {
     statusCode: number;
-    status: string;
-    isOperational?: boolean;
-  }
+    message: string;
+    stack?: string;
+  };
+}
+
+export interface IValidationError {
+  success: boolean;
+  errors: Array<{
+    value: string;
+    msg: string;
+    param: string;
+    location: string;
+  }>;
+}
+
+export interface IApiError {
+  statusCode: number;
+  status: string;
+  isOperational: boolean;
+}

@@ -1,0 +1,814 @@
+{
+    "info": {
+      "name": "MIRSAT Complete API Collection",
+      "description": "Full API documentation for MIRSAT Backend, organized by roles and features",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "Authentication",
+        "description": "Authentication related endpoints",
+        "item": [
+          {
+            "name": "Register User (Admin Only)",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_task\"]\n}"
+              },
+              "url": "{{baseUrl}}/auth/register"
+            }
+          },
+          {
+            "name": "Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\"\n}"
+              },
+              "url": "{{baseUrl}}/auth/login"
+            }
+          },
+          {
+            "name": "Forgot Password",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"test@example.com\"\n}"
+              },
+              "url": "{{baseUrl}}/auth/forgot-password"
+            }
+          },
+          {
+            "name": "Reset Password",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"token\": \"reset_token\",\n  \"password\": \"NewPassword123!\"\n}"
+              },
+              "url": "{{baseUrl}}/auth/reset-password"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Admin",
+        "description": "Admin-specific endpoints",
+        "item": [
+          {
+            "name": "User Management",
+            "item": [
+              {
+                "name": "Create User",
+                "request": {
+                  "method": "POST",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_task\"]\n}"
+                  },
+                  "url": "{{baseUrl}}/users"
+                }
+              },
+              {
+                "name": "Get All Users",
+                "request": {
+                  "method": "GET",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": {
+                    "raw": "{{baseUrl}}/users?page=1&limit=10&role=inspector",
+                    "query": [
+                      {
+                        "key": "page",
+                        "value": "1"
+                      },
+                      {
+                        "key": "limit",
+                        "value": "10"
+                      },
+                      {
+                        "key": "role",
+                        "value": "inspector"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "name": "Get User by ID",
+                "request": {
+                  "method": "GET",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": "{{baseUrl}}/users/{{userId}}"
+                }
+              },
+              {
+                "name": "Update User",
+                "request": {
+                  "method": "PUT",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"manager\",\n  \"permissions\": [\"create_task\", \"edit_task\", \"view_task\"],\n  \"isActive\": true\n}"
+                  },
+                  "url": "{{baseUrl}}/users/{{userId}}"
+                }
+              },
+              {
+                "name": "Delete User",
+                "request": {
+                  "method": "DELETE",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": "{{baseUrl}}/users/{{userId}}"
+                }
+              }
+            ]
+          },
+          {
+            "name": "Role Management",
+            "item": [
+              {
+                "name": "Create Role",
+                "request": {
+                  "method": "POST",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"senior_inspector\",\n  \"description\": \"Senior Inspector Role\",\n  \"permissions\": [\n    \"create_task\",\n    \"edit_task\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\"\n  ]\n}"
+                  },
+                  "url": "{{baseUrl}}/roles"
+                }
+              },
+              {
+                "name": "Get All Roles",
+                "request": {
+                  "method": "GET",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": "{{baseUrl}}/roles"
+                }
+              },
+              {
+                "name": "Get Role by ID",
+                "request": {
+                  "method": "GET",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": "{{baseUrl}}/roles/{{roleId}}"
+                }
+              },
+              {
+                "name": "Update Role",
+                "request": {
+                  "method": "PUT",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"lead_inspector\",\n  \"description\": \"Lead Inspector Role\",\n  \"permissions\": [\n    \"create_task\",\n    \"edit_task\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\",\n    \"manage_calendar\"\n  ],\n  \"isActive\": true\n}"
+                  },
+                  "url": "{{baseUrl}}/roles/{{roleId}}"
+                }
+              },
+              {
+                "name": "Delete Role",
+                "request": {
+                  "method": "DELETE",
+                  "header": [
+                    {
+                      "key": "Authorization",
+                      "value": "Bearer {{token}}"
+                    }
+                  ],
+                  "url": "{{baseUrl}}/roles/{{roleId}}"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Tasks",
+        "description": "Task management endpoints",
+        "item": [
+          {
+            "name": "Create Task",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"title\": \"Emergency Inspection\",\n  \"description\": \"Conduct emergency inspection at Site A\",\n  \"assignedTo\": [\"{{userId}}\"],\n  \"priority\": \"high\",\n  \"deadline\": \"2024-12-31T00:00:00.000Z\",\n  \"location\": \"Site A, Building 1\"\n}"
+              },
+              "url": "{{baseUrl}}/tasks"
+            }
+          },
+          {
+            "name": "Get All Tasks",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/tasks?status=pending&priority=high&page=1&limit=10",
+                "query": [
+                  {
+                    "key": "status",
+                    "value": "pending"
+                  },
+                  {
+                    "key": "priority",
+                    "value": "high"
+                  },
+                  {
+                    "key": "page",
+                    "value": "1"
+                  },
+                  {
+                    "key": "limit",
+                    "value": "10"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Get Task by ID",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "url": "{{baseUrl}}/tasks/{{taskId}}"
+            }
+          },
+          {
+            "name": "Update Task",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"title\": \"Updated Emergency Inspection\",\n  \"description\": \"Updated inspection details\",\n  \"priority\": \"medium\",\n  \"deadline\": \"2024-12-31T00:00:00.000Z\",\n  \"location\": \"Site A, Building 2\"\n}"
+              },
+              "url": "{{baseUrl}}/tasks/{{taskId}}"
+            }
+          },
+          {
+            "name": "Update Task Status",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"status\": \"completed\",\n  \"comment\": \"Inspection completed. All safety measures are in place.\"\n}"
+              },
+              "url": "{{baseUrl}}/tasks/{{taskId}}/status"
+            }
+          },
+          {
+            "name": "Add Task Comment",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"content\": \"Found critical issues that need immediate attention.\"\n}"
+              },
+              "url": "{{baseUrl}}/tasks/{{taskId}}/comments"
+            }
+          },
+          {
+            "name": "Upload Task Attachment",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "file",
+                    "type": "file",
+                    "src": "/path/to/inspection-report.pdf"
+                  }
+                ]
+              },
+              "url": "{{baseUrl}}/tasks/{{taskId}}/attachments"
+            }
+          },
+          {
+            "name": "Get Task Comments",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "url": "{{baseUrl}}/tasks/{{taskId}}/comments"
+            }
+          },
+          {
+            "name": "Get Task Attachments",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "url": "{{baseUrl}}/tasks/{{taskId}}/attachments"
+            }
+          }
+        ]
+      },
+      {
+      "name": "Notifications",
+      "description": "Notification management endpoints",
+      "item": [
+        {
+          "name": "Mark as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/read"
+          }
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/read-all"
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}"
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/unread-count"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "description": "Report generation and management",
+      "item": [
+        {
+          "name": "Generate Task Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2024-01-01T00:00:00.000Z\",\n  \"endDate\": \"2024-12-31T23:59:59.999Z\",\n  \"status\": [\"completed\", \"incomplete\"],\n  \"inspectors\": [\"{{userId}}\"],\n  \"format\": \"pdf\"\n}"
+            },
+            "url": "{{baseUrl}}/reports/tasks"
+          }
+        },
+        {
+          "name": "Generate Performance Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"monthly\",\n  \"year\": 2024,\n  \"month\": 1,\n  \"inspectors\": [\"{{userId}}\"],\n  \"format\": \"excel\"\n}"
+            },
+            "url": "{{baseUrl}}/reports/performance"
+          }
+        },
+        {
+          "name": "Get Report History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/history?page=1&limit=10&type=task",
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "task"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Download Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/download/{{reportId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Calendar",
+      "description": "Calendar management endpoints",
+      "item": [
+        {
+          "name": "Get Calendar Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/calendar?start=2024-01-01&end=2024-12-31",
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Calendar Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly Inspection Meeting\",\n  \"description\": \"Team meeting to discuss inspection findings\",\n  \"startTime\": \"2024-01-15T10:00:00.000Z\",\n  \"endTime\": \"2024-01-15T11:00:00.000Z\",\n  \"attendees\": [\"{{userId}}\"],\n  \"location\": \"Conference Room A\",\n  \"type\": \"meeting\"\n}"
+            },
+            "url": "{{baseUrl}}/calendar"
+          }
+        },
+        {
+          "name": "Update Calendar Event",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Meeting Title\",\n  \"startTime\": \"2024-01-15T11:00:00.000Z\",\n  \"endTime\": \"2024-01-15T12:00:00.000Z\"\n}"
+            },
+            "url": "{{baseUrl}}/calendar/{{eventId}}"
+          }
+        },
+        {
+          "name": "Delete Calendar Event",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/calendar/{{eventId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "description": "User profile management",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/profile"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"+1234567890\",\n  \"preferences\": {\n    \"emailNotifications\": true,\n    \"language\": \"en\",\n    \"timezone\": \"UTC\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/profile"
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"CurrentPass123!\",\n  \"newPassword\": \"NewPass123!\"\n}"
+            },
+            "url": "{{baseUrl}}/profile/password"
+          }
+        },
+        {
+          "name": "Upload Profile Picture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "profilePicture",
+                  "type": "file",
+                  "src": "/path/to/picture.jpg"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/profile/picture"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": "your_jwt_token_here"
+    },
+    {
+      "key": "userId",
+      "value": "user_id_here"
+    },
+    {
+      "key": "taskId",
+      "value": "task_id_here"
+    },
+    {
+      "key": "notificationId",
+      "value": "notification_id_here"
+    },
+    {
+      "key": "reportId",
+      "value": "report_id_here"
+    },
+    {
+      "key": "eventId",
+      "value": "event_id_here"
+    }
+  ]
+}

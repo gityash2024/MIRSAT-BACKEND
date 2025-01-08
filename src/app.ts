@@ -7,9 +7,13 @@ import rateLimit from 'express-rate-limit';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { logger } from './utils/logger';
+import swaggerUi from 'swagger-ui-express';
+import { specs } from './config/swagger';
 
 const app = express();
-
+if (process.env.NODE_ENV === 'development') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+}
 logger.info('Initializing application...');
 
 // Middleware
@@ -33,9 +37,8 @@ app.use('/api', limiter);
 app.use('/api/v1', routes);
 
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public', 'index.html'));
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
-
 // Health check
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'OK' });

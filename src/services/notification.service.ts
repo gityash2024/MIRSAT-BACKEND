@@ -1,0 +1,111 @@
+import { User } from '../models/User';
+import { Notification } from '../models/Notification';
+import { emailService } from './email.service';
+import { logger } from '../utils/logger';
+import { socketService } from './socket.service';
+import { SOCKET_EVENTS } from '../utils/constants';
+
+interface INotificationData {
+  recipient: string;
+  type: string;
+  title: string;
+  message: string;
+  data?: Record<string, any>;
+}
+
+class NotificationService {
+
+  async create(notificationData: INotificationData) {
+    try {
+      const notification = await Notification.create(notificationData);
+      socketService.sendToUser(
+        notificationData.recipient,
+        SOCKET_EVENTS.NOTIFICATION.NEW,
+        notification
+      );
+      // Get recipient's email
+      const user = await User.findById(notificationData.recipient);
+      
+      if (user && user.email) {
+        // Send email notification
+        await emailService.sendEmail(
+          user.email,
+          notificationData.title,
+          this.generateEmailContent(notificationData)
+        );
+      }
+
+      return notification;
+    } catch (error) {
+      logger.error('Error creating notification:', error);
+      throw error;
+    }
+  }
+
+  async getUserNotifications(userId: string, query: any = {}) {
+    const { page = 1, limit = 10, read } = query;
+    const skip = (page - 1) * limit;
+
+    const filter: any = { recipient: userId };
+    if (read !== undefined) {
+      filter.read = read === 'true';
+    }
+
+    const notifications = await Notification.find(filter)
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(parseInt(limit))
+      .exec();
+
+    const total = await Notification.countDocuments(filter);
+
+    return {
+      notifications,
+      pagination: {
+        current: parseInt(page),
+        total: Math.ceil(total / limit),
+        records: total,
+      },
+    };
+  }
+
+  async markAsRead(notificationId: string, userId: string) {
+    const notification = await Notification.findOneAndUpdate(
+      { _id: notificationId, recipient: userId, read: false },
+      { read: true, readAt: new Date() },
+      { new: true }
+    );
+
+    return notification;
+  }
+
+  async markAllAsRead(userId: string) {
+    await Notification.updateMany(
+      { recipient: userId, read: false },
+      { read: true, readAt: new Date() }
+    );
+  }
+
+  async deleteNotification(notificationId: string, userId: string) {
+    await Notification.findOneAndDelete({
+      _id: notificationId,
+      recipient: userId,
+    });
+  }
+
+  private generateEmailContent(notification: INotificationData): string {
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>${notification.title}</h2>
+        <p>${notification.message}</p>
+        ${notification.data ? `<pre>${JSON.stringify(notification.data, null, 2)}</pre>` : ''}
+        <hr>
+        <p style="color: #666; font-size: 12px;">
+          This is an automated notification from MIRSAT. Please do not reply to this email.
+        </p>
+      </div>
+    `;
+  }
+}
+
+export const notificationService = new NotificationService();

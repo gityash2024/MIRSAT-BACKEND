@@ -1,59 +1,157 @@
-// src/controllers/user.controller.ts
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { User } from '../models/User';
+import { Role } from '../models/Role';
+import {ApiError} from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
-import ApiError from '../utils/ApiError';
-import { UserModel } from '../models/User';
+import { emailService } from '../services/email.service';
 
-export const userController = {
-  getUsers: catchAsync(async (req: Request, res: Response) => {
-    const users = await UserModel.find();
-    res.status(200).json({
-      status: 'success',
-      data: { users }
-    });
-  }),
+export const createUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { name, email, password, role, permissions } = req.body;
 
-  createUser: catchAsync(async (req: Request, res: Response) => {
-    const user = await UserModel.create(req.body);
-    res.status(201).json({
-      status: 'success',
-      data: { user }
-    });
-  }),
+  // Check if user exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return next(new ApiError('Email already registered', 400));
+  }
 
-  getUser: catchAsync(async (req: Request, res: Response) => {
-    const user = await UserModel.findById(req.params.id);
-    if (!user) {
-      throw new ApiError(404, 'User not found');
+  // Validate role exists
+  const roleExists = await Role.findOne({ name: role, isActive: true });
+  if (!roleExists) {
+    return next(new ApiError('Invalid role specified', 400));
+  }
+
+  // Create user
+  const user = await User.create({
+    name,
+    email,
+    password,
+    role,
+    permissions: permissions || roleExists.permissions,
+    createdBy: req.user!._id,
+  });
+
+  // Send welcome email
+  await emailService.sendWelcomeEmail(email, name);
+
+  res.status(201).json({
+    success: true,
+    data: user,
+  });
+});
+
+export const getUsers = catchAsync(async (req: Request, res: Response) => {
+  const users = await User.find()
+    .select('-password')
+    .populate('createdBy', 'name email')
+    .sort('-createdAt');
+
+  res.status(200).json({
+    success: true,
+    count: users.length,
+    data: users,
+  });
+});
+
+export const getUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id)
+    .select('-password')
+    .populate('createdBy', 'name email');
+
+  if (!user) {
+    return next(new ApiError('User not found', 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    data: user,
+  });
+});
+
+export const updateUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { name, email, role, permissions, isActive } = req.body;
+
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(new ApiError('User not found', 404));
+  }
+
+  // Check if email is being changed and is already in use
+  if (email && email !== user.email) {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return next(new ApiError('Email already in use', 400));
     }
-    res.status(200).json({
-      status: 'success',
-      data: { user }
-    });
-  }),
+  }
 
-  updateUser: catchAsync(async (req: Request, res: Response) => {
-    const user = await UserModel.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-    if (!user) {
-      throw new ApiError(404, 'User not found');
+  // If role is being updated, validate it exists
+  if (role && role !== user.role) {
+    const roleExists = await Role.findOne({ name: role, isActive: true });
+    if (!roleExists) {
+      return next(new ApiError('Invalid role specified', 400));
     }
-    res.status(200).json({
-      status: 'success',
-      data: { user }
-    });
-  }),
+  }
 
-  deleteUser: catchAsync(async (req: Request, res: Response) => {
-    const user = await UserModel.findByIdAndDelete(req.params.id);
-    if (!user) {
-      throw new ApiError(404, 'User not found');
-    }
-    res.status(204).json({
-      status: 'success',
-      data: null
-    });
-  })
-};
+  user.name = name || user.name;
+  user.email = email || user.email;
+  user.role = role || user.role;
+  user.permissions = permissions || user.permissions;
+  user.isActive = isActive !== undefined ? isActive : user.isActive;
+
+  const updatedUser = await user.save();
+
+  res.status(200).json({
+    success: true,
+    data: updatedUser,
+  });
+});
+
+export const deleteUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(new ApiError('User not found', 404));
+  }
+
+  await user.deleteOne();
+  res.status(200).json({
+    success: true,
+    message: 'User deleted successfully',
+  });
+});
+
+export const getUserProfile = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.user!._id).select('-password');
+
+  if (!user) {
+    return next(new ApiError('User not found', 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    data: user,
+  });
+});
+
+export const updatePassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user!._id).select('+password');
+
+  if (!user) {
+    return next(new ApiError('User not found', 404));
+  }
+
+  // Check current password
+  if (!(await user.comparePassword(currentPassword))) {
+    return next(new ApiError('Current password is incorrect', 401));
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Password updated successfully',
+  });
+});
