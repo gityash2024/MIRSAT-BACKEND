@@ -25,7 +25,7 @@
               ],
               "body": {
                 "mode": "raw",
-                "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_task\"]\n}"
+                "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_tasks\"]\n}"
               },
               "url": "{{baseUrl}}/auth/register"
             }
@@ -106,7 +106,7 @@
                   ],
                   "body": {
                     "mode": "raw",
-                    "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_task\"]\n}"
+                    "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"inspector\",\n  \"permissions\": [\"view_task\", \"edit_tasks\"]\n}"
                   },
                   "url": "{{baseUrl}}/users"
                 }
@@ -169,7 +169,7 @@
                   ],
                   "body": {
                     "mode": "raw",
-                    "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"manager\",\n  \"permissions\": [\"create_task\", \"edit_task\", \"view_task\"],\n  \"isActive\": true\n}"
+                    "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"manager\",\n  \"permissions\": [\"create_tasks\", \"edit_tasks\", \"view_task\"],\n  \"isActive\": true\n}"
                   },
                   "url": "{{baseUrl}}/users/{{userId}}"
                 }
@@ -208,7 +208,7 @@
                   ],
                   "body": {
                     "mode": "raw",
-                    "raw": "{\n  \"name\": \"senior_inspector\",\n  \"description\": \"Senior Inspector Role\",\n  \"permissions\": [\n    \"create_task\",\n    \"edit_task\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\"\n  ]\n}"
+                    "raw": "{\n  \"name\": \"senior_inspector\",\n  \"description\": \"Senior Inspector Role\",\n  \"permissions\": [\n    \"create_tasks\",\n    \"edit_tasks\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\"\n  ]\n}"
                   },
                   "url": "{{baseUrl}}/roles"
                 }
@@ -255,7 +255,7 @@
                   ],
                   "body": {
                     "mode": "raw",
-                    "raw": "{\n  \"name\": \"lead_inspector\",\n  \"description\": \"Lead Inspector Role\",\n  \"permissions\": [\n    \"create_task\",\n    \"edit_task\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\",\n    \"manage_calendar\"\n  ],\n  \"isActive\": true\n}"
+                    "raw": "{\n  \"name\": \"lead_inspector\",\n  \"description\": \"Lead Inspector Role\",\n  \"permissions\": [\n    \"create_tasks\",\n    \"edit_tasks\",\n    \"delete_task\",\n    \"view_task\",\n    \"generate_reports\",\n    \"manage_calendar\"\n  ],\n  \"isActive\": true\n}"
                   },
                   "url": "{{baseUrl}}/roles/{{roleId}}"
                 }

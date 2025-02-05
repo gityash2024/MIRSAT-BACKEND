@@ -21,7 +21,7 @@ router
   .route('/')
   .post(
     authorize('admin', 'manager'),
-    hasPermission('create_task'),
+    hasPermission('create_tasks'),
     validate(taskValidation.createTask),
     createTask
   )
@@ -32,7 +32,7 @@ router
   .get(getTask)
   .put(
     authorize('admin', 'manager'),
-    hasPermission('edit_task'),
+    hasPermission('edit_tasks'),
     validate(taskValidation.updateTask),
     updateTask
   );

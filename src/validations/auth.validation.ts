@@ -7,9 +7,7 @@ export const authValidation = {
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password must be at least 8 characters long'),
-    body('role')
-      .isIn(['admin', 'manager', 'inspector'])
-      .withMessage('Invalid role specified'),
+
   ],
   
   login: [

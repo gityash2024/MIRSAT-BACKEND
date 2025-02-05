@@ -15,10 +15,11 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
   }
 
   // Validate role exists
-  const roleExists = await Role.findOne({ name: role, isActive: true });
-  if (!roleExists) {
-    return next(new ApiError('Invalid role specified', 400));
-  }
+  // const roleExists = await Role.findOne({ name: role, isActive: true });
+  // if (!roleExists) {
+  //   console.log('++====++++===++++===++++===+++===++++===++++===+++++==++++===++++ 20')
+  //   return next(new ApiError('Invalid role specified', 400));
+  // }
 
   // Create user
   const user = await User.create({
@@ -26,7 +27,7 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
     email,
     password,
     role,
-    permissions: permissions || roleExists.permissions,
+    permissions: permissions ,
     createdBy: req.user!._id,
   });
 
@@ -84,13 +85,15 @@ export const updateUser = catchAsync(async (req: Request, res: Response, next: N
     }
   }
 
-  // If role is being updated, validate it exists
-  if (role && role !== user.role) {
-    const roleExists = await Role.findOne({ name: role, isActive: true });
-    if (!roleExists) {
-      return next(new ApiError('Invalid role specified', 400));
-    }
-  }
+  // // If role is being updated, validate it exists
+  // if (role && role !== user.role) {
+  //   const roleExists = await Role.findOne({ name: role, isActive: true });
+  //   if (!roleExists) {
+  //   console.log('++====++++===++++===++++===+++===++++===++++===+++++==++++===++++ 93')
+
+  //     return next(new ApiError('Invalid role specified', 400));
+  //   }
+  // }
 
   user.name = name || user.name;
   user.email = email || user.email;

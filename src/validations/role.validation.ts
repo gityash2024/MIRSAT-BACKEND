@@ -17,14 +17,35 @@ export const roleValidation = {
       .withMessage('Permissions must be an array')
       .custom((permissions: string[]) => {
         const validPermissions = [
-          'create_task',
-          'edit_task',
-          'delete_task',
-          'view_task',
-          'manage_users',
-          'generate_reports',
-          'manage_calendar',
-          'configure_notifications'
+            'view_dashboard',
+            'manage_dashboard',
+            'view_users',
+            'create_users',
+            'edit_users',
+            'delete_users',
+            'manage_roles',
+            'manage_permissions',
+            'view_tasks',
+            'create_tasks',
+            'edit_tasks',
+            'delete_tasks',
+            'assign_tasks',
+            'review_tasks',
+            'view_inspections',
+            'create_inspections',
+            'edit_inspections',
+            'delete_inspections',
+            'approve_inspections',
+            'view_reports',
+            'create_reports',
+            'export_reports',
+            'share_reports',
+            'view_calendar',
+            'manage_calendar',
+            'schedule_events',
+            'view_settings',
+            'manage_settings',
+            'system_config'
         ];
         return permissions.every(permission => validPermissions.includes(permission));
       })
@@ -45,8 +66,8 @@ export const roleValidation = {
       .isArray()
       .custom((permissions: string[]) => {
         const validPermissions = [
-          'create_task',
-          'edit_task',
+          'create_tasks',
+          'edit_tasks',
           'delete_task',
           'view_task',
           'manage_users',
