@@ -15,11 +15,11 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
   }
 
   // Validate role exists
-  const roleExists = await Role.findOne({ name: role, isActive: true });
-  if (!roleExists) {
-    console.log('++====++++===++++===++++===+++===++++===++++===+++++==++++===++++ 20')
-    return next(new ApiError('Invalid role specified', 400));
-  }
+  // const roleExists = await Role.findOne({ name: role, isActive: true });
+  // if (!roleExists) {
+  //   console.log('++====++++===++++===++++===+++===++++===++++===+++++==++++===++++ 20')
+  //   return next(new ApiError('Invalid role specified', 400));
+  // }
 
   // Create user
   const user = await User.create({
@@ -27,7 +27,7 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
     email,
     password,
     role,
-    permissions: permissions || roleExists.permissions,
+    permissions: permissions ,
     createdBy: req.user!._id,
   });
 

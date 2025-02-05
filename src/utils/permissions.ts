@@ -48,7 +48,7 @@ export const PERMISSIONS = {
   
   export const DEFAULT_ROLE_PERMISSIONS = {
     admin: Object.values(PERMISSIONS).flatMap(group => Object.values(group)),
-    management: [
+    manager: [
       PERMISSIONS.DASHBOARD.VIEW,
       PERMISSIONS.TASKS.VIEW,
       PERMISSIONS.TASKS.CREATE,
