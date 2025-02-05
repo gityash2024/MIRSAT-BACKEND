@@ -1,11 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
-
+import { PERMISSIONS } from '../../src/utils/permissions';
 export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
   role: string;
+  department?: string;
   permissions: string[];
   isActive: boolean;
   lastLogin?: Date;
@@ -15,7 +16,7 @@ export interface IUser extends Document {
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-const userSchema = new Schema<IUser>(
+const userSchema = new Schema(
   {
     name: {
       type: String,
@@ -38,22 +39,17 @@ const userSchema = new Schema<IUser>(
     role: {
       type: String,
       required: true,
-      enum: ['admin', 'manager', 'inspector'],
+      enum: ['admin', 'management', 'inspector'],
       default: 'inspector',
     },
-    permissions: [{
+    department: {
       type: String,
-      enum: [
-        'create_task',
-        'edit_task',
-        'delete_task',
-        'view_task',
-        'manage_users',
-        'generate_reports',
-        'manage_calendar',
-        'configure_notifications'
-      ]
-    }],
+      enum: ['Field Operations', 'Operations Management', 'Administration'],
+    },
+    permissions: [{
+        type: String,
+        enum: Object.values(PERMISSIONS).flatMap(group => Object.values(group))
+      }],
     isActive: {
       type: Boolean,
       default: true,

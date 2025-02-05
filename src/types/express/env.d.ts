@@ -7,6 +7,5 @@ declare namespace NodeJS {
       JWT_EXPIRES_IN: string;
       ADMIN_EMAIL: string;
       ADMIN_PASSWORD: string;
-      // ... other env variables
     }
   }

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { PERMISSIONS } from '../../src/utils/permissions';
 
 export interface IRole extends Document {
   name: string;
@@ -22,17 +23,7 @@ const roleSchema = new Schema<IRole>(
     },
     permissions: [{
       type: String,
-      required: true,
-      enum: [
-        'create_task',
-        'edit_task',
-        'delete_task',
-        'view_task',
-        'manage_users',
-        'generate_reports',
-        'manage_calendar',
-        'configure_notifications'
-      ]
+      enum: Object.values(PERMISSIONS).flatMap(group => Object.values(group))
     }],
     isActive: {
       type: Boolean,

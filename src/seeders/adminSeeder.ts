@@ -5,6 +5,7 @@ import { Role } from '../models/Role';
 import { logger } from '../utils/logger';
 import { PERMISSIONS } from '../utils/permissions';
 import mongoose from 'mongoose';
+const adminPermissions = Object.values(PERMISSIONS).flatMap(group => Object.values(group));
 
 const adminUser = {
   name: 'Super Admin',
@@ -12,9 +13,15 @@ const adminUser = {
   password: process.env.ADMIN_PASSWORD || 'Admin@123!',
   role: 'admin',
   isActive: true,
-  permissions: Object.values(PERMISSIONS).flatMap(group => Object.values(group))
+  permissions: [
+    'view_tasks', 'create_tasks', 'edit_tasks', 'delete_tasks',
+    'view_users', 'create_users', 'edit_users', 'delete_users',
+    'manage_roles', 'manage_permissions',
+    'view_reports', 'create_reports', 'export_reports',
+    'view_calendar', 'manage_calendar', 'schedule_events',
+    'view_settings', 'manage_settings', 'system_config'
+  ]
 };
-
 export const seedAdmin = async () => {
   try {
     // Create admin user first
