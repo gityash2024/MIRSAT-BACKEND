@@ -19,7 +19,11 @@ const adminUser = {
     'manage_roles', 'manage_permissions',
     'view_reports', 'create_reports', 'export_reports',
     'view_calendar', 'manage_calendar', 'schedule_events',
-    'view_settings', 'manage_settings', 'system_config'
+    'view_settings', 'manage_settings', 'system_config', 'view_inspections',
+    'create_inspections',
+    'edit_inspections',
+    'delete_inspections',
+    'approve_inspections'
   ]
 };
 export const seedAdmin = async () => {

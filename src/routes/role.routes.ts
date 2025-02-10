@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, authorize } from '../middleware/auth.middleware';
+import { protect } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { roleValidation } from '../validations/role.validation';
 import {
@@ -12,7 +12,7 @@ import {
 
 const router = Router();
 
-router.use(protect, authorize('admin'));
+router.use(protect);
 
 router
   .route('/')
