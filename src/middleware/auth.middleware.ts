@@ -1,8 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
-import {ApiError} from '../utils/ApiError';
+import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
+import { DEFAULT_ROLE_PERMISSIONS, ROLES } from '../utils/permissions';
+
+type Role = keyof typeof DEFAULT_ROLE_PERMISSIONS;
 
 export const protect = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   let token: string | undefined;
@@ -12,7 +15,7 @@ export const protect = catchAsync(async (req: Request, res: Response, next: Next
   }
 
   if (!token) {
-    return next(new ApiError('Not authorized to access this route', 401));
+    return next(new ApiError(401, 'Not authorized to access this route'));
   }
 
   try {
@@ -20,46 +23,36 @@ export const protect = catchAsync(async (req: Request, res: Response, next: Next
     const user = await User.findById(decoded.id);
 
     if (!user) {
-      return next(new ApiError('User not found', 404));
+      return next(new ApiError(404, 'User not found'));
     }
 
     if (!user.isActive) {
-      return next(new ApiError('User account is deactivated', 401));
+      return next(new ApiError(401, 'User account is deactivated'));
     }
 
-    req.user = user;
+    // Use the user's actual permissions instead of role-based ones
+    req.user = {
+      ...user.toObject()
+    };
+    console.log('Token:', token);
+    console.log('User found:', user);
+    console.log('User permissions:', req.user.permissions);
     next();
   } catch (error) {
-    return next(new ApiError('Not authorized to access this route', 401));
+    return next(new ApiError(401, 'Not authorized to access this route'));
   }
 });
 
-export const authorize = (...roles: string[]) => {
+export const hasPermission = (requiredPermission: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return next(new ApiError('Not authorized to access this route', 401));
+      return next(new ApiError(401, 'Not authorized to access this route'));
     }
 
-    if (!roles.includes(req.user.role)) {
-      return next(new ApiError(`User role ${req.user.role} is not authorized to access this route`, 403));
-    }
-
-    next();
-  };
-};
-
-export const hasPermission = (...permissions: string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return next(new ApiError('Not authorized to access this route', 401));
-    }
-
-    const hasAllPermissions = permissions.every(permission => 
-      req.user.permissions.includes(permission)
-    );
-
-    if (!hasAllPermissions) {
-      return next(new ApiError('You do not have the required permissions', 403));
+    const userPermissions = req.user.permissions || [];
+    
+    if (!userPermissions.includes(requiredPermission)) {
+      return next(new ApiError(403, 'You do not have the required permissions'));
     }
 
     next();

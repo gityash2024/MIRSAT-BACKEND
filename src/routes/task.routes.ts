@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, authorize, hasPermission } from '../middleware/auth.middleware';
+import { protect, hasPermission } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { taskValidation } from '../validations/task.validation';
 import { upload } from '../services/upload.service';
@@ -20,7 +20,6 @@ router.use(protect);
 router
   .route('/')
   .post(
-    authorize('admin', 'manager'),
     hasPermission('create_tasks'),
     validate(taskValidation.createTask),
     createTask
@@ -31,7 +30,6 @@ router
   .route('/:id')
   .get(getTask)
   .put(
-    authorize('admin', 'manager'),
     hasPermission('edit_tasks'),
     validate(taskValidation.updateTask),
     updateTask

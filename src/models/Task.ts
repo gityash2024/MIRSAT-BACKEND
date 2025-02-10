@@ -1,5 +1,19 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface ITaskProgress {
+  subLevelId: Schema.Types.ObjectId;
+  status: 'pending' | 'in_progress' | 'completed';
+  completedAt?: Date;
+  completedBy?: Schema.Types.ObjectId;
+  notes?: string;
+  photos?: string[];
+  signoff?: {
+    signedBy: Schema.Types.ObjectId;
+    signedAt: Date;
+    comments?: string;
+  };
+}
+
 export interface ITask extends Document {
   title: string;
   description: string;
@@ -9,6 +23,9 @@ export interface ITask extends Document {
   priority: 'low' | 'medium' | 'high';
   deadline: Date;
   location?: string;
+  inspectionLevel: Schema.Types.ObjectId;
+  progress: ITaskProgress[];
+  overallProgress: number;
   attachments: {
     url: string;
     filename: string;
@@ -34,100 +51,135 @@ export interface ITask extends Document {
     timestamp: Date;
   }[];
   isActive: boolean;
+  taskMetrics?: {
+    timeSpent: number;
+    completionRate: number;
+    subTasksCompleted: number;
+    totalSubTasks: number;
+  };
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const taskSchema = new Schema<ITask>(
-  {
-    title: {
-      type: String,
-      required: [true, 'Task title is required'],
-      trim: true,
-    },
-    description: {
-      type: String,
-      required: [true, 'Task description is required'],
-    },
-    assignedTo: [{
+const taskProgressSchema = new Schema<ITaskProgress>({
+  subLevelId: { type: Schema.Types.ObjectId, required: true, ref: 'InspectionLevel.subLevels' },
+  status: { 
+    type: String, 
+    enum: ['pending', 'in_progress', 'completed'],
+    default: 'pending'
+  },
+  completedAt: { type: Date },
+  completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  notes: { type: String },
+  photos: [{ type: String }],
+  signoff: {
+    signedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    signedAt: { type: Date },
+    comments: { type: String }
+  }
+});
+
+const taskSchema = new Schema<ITask>({
+  title: {
+    type: String,
+    required: [true, 'Task title is required'],
+    trim: true,
+  },
+  description: {
+    type: String,
+    required: [true, 'Task description is required'],
+  },
+  assignedTo: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  }],
+  createdBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'in_progress', 'completed', 'incomplete', 'partially_completed'],
+    default: 'pending',
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high'],
+    default: 'medium',
+  },
+  deadline: {
+    type: Date,
+    required: true,
+  },
+  location: {
+    type: String,
+  },
+  inspectionLevel: {
+    type: Schema.Types.ObjectId,
+    ref: 'InspectionLevel',
+    required: true,
+  },
+  progress: [taskProgressSchema],
+  overallProgress: {
+    type: Number,
+    default: 0,
+  },
+  attachments: [{
+    url: String,
+    filename: String,
+    contentType: String,
+  }],
+  comments: [{
+    user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-    }],
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+    },
+    content: {
+      type: String,
       required: true,
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'in_progress', 'completed', 'incomplete', 'partially_completed'],
-      default: 'pending',
-    },
-    priority: {
-      type: String,
-      enum: ['low', 'medium', 'high'],
-      default: 'medium',
-    },
-    deadline: {
-      type: Date,
-      required: true,
-    },
-    location: {
-      type: String,
     },
     attachments: [{
       url: String,
       filename: String,
-      contentType: String,
     }],
-    comments: [{
-      user: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-      },
-      content: {
-        type: String,
-        required: true,
-      },
-      attachments: [{
-        url: String,
-        filename: String,
-      }],
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-    }],
-    statusHistory: [{
-      status: {
-        type: String,
-        required: true,
-      },
-      changedBy: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-      },
-      comment: String,
-      attachments: [{
-        url: String,
-        filename: String,
-      }],
-      timestamp: {
-        type: Date,
-        default: Date.now,
-      },
-    }],
-    isActive: {
-      type: Boolean,
-      default: true,
+    createdAt: {
+      type: Date,
+      default: Date.now,
     },
+  }],
+  statusHistory: [{
+    status: {
+      type: String,
+      required: true,
+    },
+    changedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    comment: String,
+    attachments: [{
+      url: String,
+      filename: String,
+    }],
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
+  isActive: {
+    type: Boolean,
+    default: true,
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
-  }
+},
+{
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+}
 );
 
 // Add indexes for common queries

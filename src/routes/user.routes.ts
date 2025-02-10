@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, authorize } from '../middleware/auth.middleware';
+import { protect } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { userValidation } from '../validations/user.validation';
 import {
@@ -21,7 +21,6 @@ router.get('/profile', getUserProfile);
 router.put('/update-password', validate(userValidation.updatePassword), updatePassword);
 
 // Admin only routes
-router.use(authorize('admin'));
 
 router
   .route('/')
