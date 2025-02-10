@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB
 
+
 connectDB().then(() => {
   httpServer.listen(PORT, () => {
     logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
