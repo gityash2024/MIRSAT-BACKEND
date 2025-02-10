@@ -9,8 +9,6 @@ socketService.initialize(httpServer);
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-
 
 connectDB().then(() => {
   httpServer.listen(PORT, () => {
