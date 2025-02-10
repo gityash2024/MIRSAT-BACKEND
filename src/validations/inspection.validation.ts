@@ -66,11 +66,12 @@ export const updateInspectionLevel = {
     }),
     subLevels: Joi.array().items(
       Joi.object({
-        _id: Joi.string().custom(objectId),
+        _id: Joi.string().custom(objectId).optional(), // For existing sublevels
+        id: Joi.number().optional(),  // For new sublevels
         name: Joi.string(),
         description: Joi.string(),
         order: Joi.number(),
-        isCompleted: Joi.boolean()
+        isCompleted: Joi.boolean().optional()
       })
     ),
     completionCriteria: Joi.object({
@@ -96,7 +97,7 @@ export const updateInspectionLevel = {
     createdAt: Joi.date(),
     updatedAt: Joi.date(),
     __v: Joi.number(),
-    id: Joi.string()
+    id: Joi.string().custom(objectId)
   })
 };
 
