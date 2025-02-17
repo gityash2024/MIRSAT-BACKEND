@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.User = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const permissions_1 = require("../../src/utils/permissions");
+const permissions_1 = require("../utils/permissions");
 const userSchema = new mongoose_1.Schema({
     name: {
         type: String,

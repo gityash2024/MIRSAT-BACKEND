@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Role = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const permissions_1 = require("../../src/utils/permissions");
+const permissions_1 = require("../utils/permissions");
 const roleSchema = new mongoose_1.Schema({
     name: {
         type: String,
