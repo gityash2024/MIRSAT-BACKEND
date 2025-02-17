@@ -1,14 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { Task } from '../models/Task';
 import { User } from '../models/User';
-import {ApiError} from '../utils/ApiError';
+import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
 
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { title, description, assignedTo, priority, deadline, location } = req.body;
+  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel } = req.body;
 
-  // Verify all assigned users exist and are active
   const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
   if (users.length !== assignedTo.length) {
     return next(new ApiError('One or more assigned users are invalid or inactive', 400));
@@ -17,53 +16,88 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
   const task = await Task.create({
     title,
     description,
+    inspectionLevel,
     assignedTo,
     priority,
     deadline,
     location,
+    attachments,
     createdBy: req.user!._id,
   });
 
+  const populatedTask = await Task.findById(task._id)
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
   res.status(201).json({
     success: true,
-    data: task,
+    data: populatedTask,
   });
 });
 
 export const getTasks = catchAsync(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+  const search = req.query.search as string;
+
   let query: any = {};
 
-  // Filter by status if provided
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } },
+      { location: { $regex: search, $options: 'i' } }
+    ];
+  }
+
   if (req.query.status) {
     query.status = req.query.status;
   }
 
-  // Filter by priority if provided
   if (req.query.priority) {
     query.priority = req.query.priority;
   }
 
-  // Filter tasks based on user role
   if (req.user!.role !== 'admin') {
     query.assignedTo = req.user!._id;
   }
 
+  const total = await Task.countDocuments(query);
   const tasks = await Task.find(query)
-    .populate('assignedTo', 'name email')
+    .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
-    .sort('-createdAt');
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .sort('-createdAt')
+    .skip(skip)
+    .limit(limit);
 
   res.status(200).json({
     success: true,
-    count: tasks.length,
     data: tasks,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
   });
 });
 
 export const getTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const task = await Task.findById(req.params.id)
-    .populate('assignedTo', 'name email')
+    .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
     .populate('comments.user', 'name email')
     .populate('statusHistory.changedBy', 'name email');
 
@@ -85,7 +119,6 @@ export const updateTask = catchAsync(async (req: Request, res: Response, next: N
     return next(new ApiError('Task not found', 404));
   }
 
-  // Verify assigned users if being updated
   if (updates.assignedTo) {
     const users = await User.find({ _id: { $in: updates.assignedTo }, isActive: true });
     if (users.length !== updates.assignedTo.length) {
@@ -93,13 +126,21 @@ export const updateTask = catchAsync(async (req: Request, res: Response, next: N
     }
   }
 
-  // Update the task
   Object.assign(task, updates);
   await task.save();
 
+  const updatedTask = await Task.findById(task._id)
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
   res.status(200).json({
     success: true,
-    data: task,
+    data: updatedTask,
   });
 });
 
@@ -121,9 +162,18 @@ export const updateTaskStatus = catchAsync(async (req: Request, res: Response, n
 
   await task.save();
 
+  const updatedTask = await Task.findById(task._id)
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
   res.status(200).json({
     success: true,
-    data: task,
+    data: updatedTask,
   });
 });
 
@@ -143,9 +193,18 @@ export const addTaskComment = catchAsync(async (req: Request, res: Response, nex
 
   await task.save();
 
+  const updatedTask = await Task.findById(task._id)
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
   res.status(200).json({
     success: true,
-    data: task,
+    data: updatedTask,
   });
 });
 
@@ -163,8 +222,17 @@ export const uploadTaskAttachment = catchAsync(async (req: Request, res: Respons
   task.attachments.push(uploadResult);
   await task.save();
 
+  const updatedTask = await Task.findById(task._id)
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email')
+    .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('progress.completedBy', 'name email')
+    .populate('progress.signoff.signedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
   res.status(200).json({
     success: true,
-    data: task,
+    data: updatedTask,
   });
 });
