@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { PERMISSIONS } from '../../src/utils/permissions';
+import { PERMISSIONS } from '../utils/permissions';
 
 export interface IRole extends Document {
   name: string;
