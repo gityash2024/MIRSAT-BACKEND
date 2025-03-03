@@ -86,6 +86,8 @@ console.log(email,password);
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: user.permissions,
+      department: user.department
     },
   });
 });
