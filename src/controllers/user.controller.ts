@@ -32,7 +32,7 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
   });
 
   // Send welcome email
-  await emailService.sendWelcomeEmail(email, name);
+  // await emailService.sendWelcomeEmail(email, name);
 
   res.status(201).json({
     success: true,

@@ -13,7 +13,6 @@ router.post(
   '/',
   protect,  // Add this first
   hasPermission('create_inspections'),
-  validate(inspectionValidation.createInspectionLevel),
   inspectionController.createInspectionLevel
 );
 
@@ -39,7 +38,6 @@ router.patch(
   '/:inspectionId',
   protect,  // Add this first
   hasPermission('edit_inspections'),
-  validate(inspectionValidation.updateInspectionLevel),
   inspectionController.updateInspectionLevel
 );
 

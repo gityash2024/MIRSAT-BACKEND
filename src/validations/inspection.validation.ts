@@ -1,6 +1,23 @@
 import Joi from 'joi';
 import { objectId } from './custom.validation';
 
+// Create a recursive schema for subLevels
+const subLevelSchema = Joi.object({
+  _id: Joi.string().custom(objectId).optional(),
+  id: Joi.alternatives(Joi.string(), Joi.number()).optional(),
+  name: Joi.string().required(),
+  description: Joi.string().required(),
+  order: Joi.number().required(),
+  isCompleted: Joi.boolean().optional(),
+  completedAt: Joi.date().optional(),
+  completedBy: Joi.string().custom(objectId).optional()
+});
+
+// Self-reference to allow nesting
+subLevelSchema.append({
+  subLevels: Joi.array().items(Joi.link('#subLevelSchema')).optional()
+}).id('subLevelSchema');
+
 export const queryInspectionLevels = {
   query: Joi.object().keys({
     search: Joi.string().allow('', null),
@@ -28,17 +45,7 @@ export const createInspectionLevel = {
     type: Joi.string().valid('safety', 'environmental', 'operational', 'quality').required(),
     status: Joi.string().valid('active', 'inactive', 'draft', 'archived'),
     priority: Joi.string().valid('high', 'medium', 'low'),
-    subLevels: Joi.array().items(
-      Joi.object({
-        name: Joi.string().required(),
-        description: Joi.string().required(),
-        order: Joi.number().required(),
-        id: Joi.number(), // Joi.string
-        isCompleted: Joi.boolean(),
-        completedAt: Joi.date(),
-        completedBy: Joi.string().custom(objectId)
-      })
-    ),
+    subLevels: Joi.array().items(subLevelSchema),
     completionCriteria: Joi.object({
       requiredPhotos: Joi.boolean(),
       requiredNotes: Joi.boolean(),
@@ -64,16 +71,7 @@ export const updateInspectionLevel = {
       avgCompletionTime: Joi.number(),
       complianceRate: Joi.number()
     }),
-    subLevels: Joi.array().items(
-      Joi.object({
-        _id: Joi.string().custom(objectId).optional(), // For existing sublevels
-        id: Joi.number().optional(),  // For new sublevels
-        name: Joi.string(),
-        description: Joi.string(),
-        order: Joi.number(),
-        isCompleted: Joi.boolean().optional()
-      })
-    ),
+    subLevels: Joi.array().items(subLevelSchema),
     completionCriteria: Joi.object({
       requiredPhotos: Joi.boolean(),
       requiredNotes: Joi.boolean(),
@@ -104,5 +102,30 @@ export const updateInspectionLevel = {
 export const deleteInspectionLevel = {
   params: Joi.object().keys({
     inspectionId: Joi.string().custom(objectId).required()
+  })
+};
+
+export const updateSubLevel = {
+  params: Joi.object().keys({
+    inspectionId: Joi.string().custom(objectId).required(),
+    subLevelId: Joi.string().custom(objectId).required()
+  }),
+  body: Joi.object().keys({
+    name: Joi.string(),
+    description: Joi.string(),
+    order: Joi.number(),
+    isCompleted: Joi.boolean(),
+    completedAt: Joi.date(),
+    completedBy: Joi.string().custom(objectId),
+    subLevels: Joi.array().items(subLevelSchema)
+  })
+};
+
+export const reorderSubLevels = {
+  params: Joi.object().keys({
+    inspectionId: Joi.string().custom(objectId).required()
+  }),
+  body: Joi.object().keys({
+    newOrder: Joi.array().items(Joi.string().custom(objectId)).required()
   })
 };

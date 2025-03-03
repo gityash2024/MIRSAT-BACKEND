@@ -5,12 +5,34 @@ import { ApiError } from '../utils/ApiError';
 import InspectionLevel from '../models/InspectionLevel';
 import { pick } from 'lodash';
 
+// Helper function to process and prepare sublevels for database
+const processSubLevels = (subLevels:any) => {
+  if (!subLevels || !Array.isArray(subLevels)) return [];
+
+  return subLevels.map((subLevel) => {
+    const processedSubLevel = { ...subLevel };
+    
+    // Process any nested sub-levels recursively
+    if (subLevel.subLevels && Array.isArray(subLevel.subLevels)) {
+      processedSubLevel.subLevels = processSubLevels(subLevel.subLevels);
+    }
+    
+    return processedSubLevel;
+  });
+};
+
 export const createInspectionLevel = catchAsync(async (req: Request, res: Response) => {
   const inspectionData = {
     ...req.body,
     createdBy: req.user?._id,
     updatedBy: req.user?._id
   };
+  
+  // Process nested sub-levels if present
+  if (inspectionData.subLevels) {
+    inspectionData.subLevels = processSubLevels(inspectionData.subLevels);
+  }
+  
   const inspection = await InspectionLevel.create(inspectionData);
   res.status(httpStatus.CREATED).send(inspection);
 });
@@ -95,6 +117,11 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
     updatedBy: req.user?._id
   };
 
+  // Process nested sub-levels if present
+  if (updateData.subLevels) {
+    updateData.subLevels = processSubLevels(updateData.subLevels);
+  }
+
   Object.assign(inspection, updateData);
   await inspection.save();
   
@@ -127,6 +154,24 @@ export const deleteInspectionLevel = catchAsync(async (req: Request, res: Respon
   res.status(httpStatus.NO_CONTENT).send();
 });
 
+// Helper function to find a sublevel recursively at any nesting level
+const findSubLevelById:any = (subLevels:any, subLevelId:any) => {
+  for (const subLevel of subLevels) {
+    if (subLevel._id.toString() === subLevelId) {
+      return subLevel;
+    }
+    
+    if (subLevel.subLevels && subLevel.subLevels.length > 0) {
+      const nestedSubLevel = findSubLevelById(subLevel.subLevels, subLevelId);
+      if (nestedSubLevel) {
+        return nestedSubLevel;
+      }
+    }
+  }
+  
+  return null;
+};
+
 export const updateSubLevel = catchAsync(async (req: Request, res: Response) => {
   const { inspectionId, subLevelId } = req.params;
   
@@ -139,9 +184,15 @@ export const updateSubLevel = catchAsync(async (req: Request, res: Response) => 
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  const subLevel = inspection.subLevels.id(subLevelId);
+  // Find the sublevel at any nesting level
+  const subLevel = findSubLevelById(inspection.subLevels, subLevelId);
   if (!subLevel) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Sub level not found');
+  }
+
+  // Process nested subLevels if they exist in the request
+  if (req.body.subLevels) {
+    req.body.subLevels = processSubLevels(req.body.subLevels);
   }
 
   Object.assign(subLevel, req.body);
@@ -164,11 +215,13 @@ export const reorderSubLevels = catchAsync(async (req: Request, res: Response) =
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and new order are required');
   }
 
-  const inspection = await InspectionLevel.findById(inspectionId);
+  const inspection :any= await InspectionLevel.findById(inspectionId);
   if (!inspection) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
+  // Simple reordering for top-level subLevels only
+  // For nested reordering, you would need to pass a path to the specific subLevels array
   newOrder.forEach((id: string, index: number) => {
     const subLevel = inspection.subLevels.id(id);
     if (subLevel) {

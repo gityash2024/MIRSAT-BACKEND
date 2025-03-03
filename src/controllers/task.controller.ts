@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
+import InspectionLevel from '../../src/models/InspectionLevel';
 
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel } = req.body;
@@ -12,6 +13,43 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
   if (users.length !== assignedTo.length) {
     return next(new ApiError('One or more assigned users are invalid or inactive', 400));
   }
+
+  // Get the inspection level to create appropriate progress entries
+  const inspection = await InspectionLevel.findById(inspectionLevel);
+  if (!inspection) {
+    return next(new ApiError('Invalid inspection level', 400));
+  }
+
+  // Function to flatten nested sub-levels into a single array
+  const flattenSubLevels = (subLevels:any, result:any = []) => {
+    if (!subLevels || !subLevels.length) return result;
+    
+    subLevels.forEach((sl:any) => {
+      result.push(sl);
+      if (sl.subLevels && sl.subLevels.length > 0) {
+        flattenSubLevels(sl.subLevels, result);
+      }
+    });
+    
+    return result;
+  };
+
+  // Create progress entries for all sub-levels
+  const allSubLevels = flattenSubLevels(inspection.subLevels);
+  const progress = allSubLevels.map((sl:any) => ({
+    subLevel: sl._id,
+    subLevelName: sl.name,
+    status: 'pending',
+    completedAt: null,
+    completedBy: null,
+    signoff: {
+      required: sl.requiresSignoff || false,
+      signed: false,
+      signedBy: null,
+      signedAt: null
+    },
+    comments: []
+  }));
 
   const task = await Task.create({
     title,
@@ -23,6 +61,7 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
     location,
     attachments,
     createdBy: req.user!._id,
+    progress
   });
 
   const populatedTask = await Task.findById(task._id)
@@ -39,7 +78,6 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
     data: populatedTask,
   });
 });
-
 export const getTasks = catchAsync(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;

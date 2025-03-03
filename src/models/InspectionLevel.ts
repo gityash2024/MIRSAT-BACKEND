@@ -7,6 +7,7 @@ export interface ISubLevel {
   isCompleted: boolean;
   completedAt?: Date;
   completedBy?: Schema.Types.ObjectId;
+  subLevels?: ISubLevel[];
 }
 
 export interface IInspectionLevel extends Document {
@@ -15,7 +16,7 @@ export interface IInspectionLevel extends Document {
   type: 'safety' | 'environmental' | 'operational' | 'quality';
   status: 'active' | 'inactive' | 'draft' | 'archived';
   priority: 'high' | 'medium' | 'low';
-  subLevels: any;
+  subLevels: ISubLevel[];
   createdBy: Schema.Types.ObjectId;
   updatedBy: Schema.Types.ObjectId;
   completionCriteria: {
@@ -59,14 +60,24 @@ export interface IInspectionLevel extends Document {
   updatedAt: Date;
 }
 
-const subLevelSchema = new Schema<ISubLevel>({
+// Create subLevelSchema with recursive referencing for nested structure
+const subLevelSchema = new Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   order: { type: Number, required: true },
   isCompleted: { type: Boolean, default: false },
   completedAt: { type: Date },
   completedBy: { type: Schema.Types.ObjectId, ref: 'User' }
-}, { _id: true });
+});
+
+// Add the self-reference for nested subLevels
+subLevelSchema.add({
+  subLevels: [subLevelSchema]
+});
+
+// Important settings for proper serialization and deserialization
+subLevelSchema.set('toJSON', { virtuals: true });
+subLevelSchema.set('toObject', { virtuals: true });
 
 const inspectionLevelSchema = new Schema<IInspectionLevel>({
   name: { type: String, required: true, trim: true },
@@ -134,6 +145,7 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   toObject: { virtuals: true }
 });
 
+// Add indexes for better query performance
 inspectionLevelSchema.index({ name: 1 });
 inspectionLevelSchema.index({ type: 1 });
 inspectionLevelSchema.index({ status: 1 });
