@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "build": "rimraf dist && tsc && cp -r public dist/",
-    "dev": "nodemon",
+    "dev": "NODE_OPTIONS=\"--max-old-space-size=2048\" nodemon",
     "lint": "eslint . --ext .ts",
     "test": "jest",
     "seed:admin": "NODE_ENV=development ts-node src/seeders/adminSeeder.ts"
