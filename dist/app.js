@@ -21,7 +21,7 @@ if (process.env.NODE_ENV === 'development') {
 logger_1.logger.info('Initializing application...');
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
-    origin: ['https://mirsat-frontend.vercel.app', 'http://localhost:5173', 'https://mirsat.mymultimeds.com'],
+    origin: ['https://mirsat-frontend.vercel.app', 'http://localhost:5173','http://localhost:5174', 'https://mirsat.mymultimeds.com'],
     methods: '*',
     credentials: true
 }));
