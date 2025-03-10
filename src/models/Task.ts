@@ -1,8 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ITaskProgress {
-  subLevelId: Schema.Types.ObjectId;
+  subLevelId:any;
   status: 'pending' | 'in_progress' | 'completed';
+  startedAt?: Date;
   completedAt?: Date;
   completedBy?: Schema.Types.ObjectId;
   notes?: string;
@@ -56,6 +57,7 @@ export interface ITask extends Document {
     completionRate: number;
     subTasksCompleted: number;
     totalSubTasks: number;
+    subLevelTimeSpent?: Record<string, number>;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +70,7 @@ const taskProgressSchema = new Schema<ITaskProgress>({
     enum: ['pending', 'in_progress', 'completed'],
     default: 'pending'
   },
+  startedAt: { type: Date },
   completedAt: { type: Date },
   completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   notes: { type: String },
@@ -182,7 +185,6 @@ const taskSchema = new Schema<ITask>({
 }
 );
 
-// Add indexes for common queries
 taskSchema.index({ status: 1 });
 taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ createdBy: 1 });

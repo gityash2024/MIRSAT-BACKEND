@@ -1,8 +1,13 @@
+// In upload.service.ts
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
-import path from 'path';
-import {ApiError} from '../utils/ApiError';
+import { ApiError } from '../utils/ApiError';
+interface CloudinaryStorageParams {
+  folder: string;
+  allowed_formats: string[];
+  resource_type: string;
+}
 
 // Configure Cloudinary
 cloudinary.config({
@@ -11,38 +16,18 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Configure storage
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'mirsat-tasks',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xlsx', 'xls'],
     resource_type: 'auto',
-  } as any,
+  } as CloudinaryStorageParams
 });
-
-// File filter
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedMimes = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ];
-
-  if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new ApiError('Invalid file type', 400));
-  }
-};
 
 // Create multer upload instance
 export const upload = multer({
   storage: storage,
-  fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
   },
@@ -52,17 +37,15 @@ export const upload = multer({
 export const uploadService = {
   async uploadFile(file: Express.Multer.File) {
     try {
-      const result = await cloudinary.uploader.upload(file.path, {
-        resource_type: 'auto',
-        folder: 'mirsat-tasks',
-      });
-
+      // Note: With CloudinaryStorage, file is already uploaded when it reaches this point
+      // We just need to return the file information
       return {
-        url: result.secure_url,
+        url: file.path, // CloudinaryStorage puts the secure_url in the path property
         filename: file.originalname,
         contentType: file.mimetype,
       };
     } catch (error) {
+      console.error('Upload error:', error);
       throw new ApiError('Error uploading file', 500);
     }
   },

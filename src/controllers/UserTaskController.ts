@@ -10,6 +10,42 @@ interface QueryFilters {
   [key: string]: any;
 }
 
+// Using mongoose.Types.ObjectId for compatibility with the Task model
+interface ITaskProgress {
+  subLevelId: mongoose.Types.ObjectId;
+  status: string;
+  startedAt?: Date;
+  completedAt?: Date;
+  completedBy?: mongoose.Types.ObjectId | any;
+  notes?: string;
+  photos?: string[];
+}
+
+interface IStatusHistory {
+  status: string;
+  changedBy: mongoose.Types.ObjectId;
+  comment: string;
+  timestamp: Date;
+}
+
+interface ISubLevel {
+  _id: mongoose.Types.ObjectId;
+  subLevels?: ISubLevel[];
+}
+
+// Use any for flexibility with mongoose document methods
+interface ITaskDocument extends mongoose.Document {
+  assignedTo: any[];
+  inspectionLevel: any;
+  progress: any[];
+  overallProgress: number;
+  status: string;
+  statusHistory: any[];
+  createdAt: Date;
+  updatedAt: Date;
+  toObject(): any;
+}
+
 export const getUserTasks = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id;
   const filter: any = { assignedTo: userId };
@@ -184,7 +220,7 @@ export const updateTaskProgress = catchAsync(async (req: Request, res: Response)
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid task or sub-level ID');
   }
 
-  const task: any = await Task.findById(taskId);
+  const task = await Task.findById(taskId);
   
   if (!task) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
@@ -195,12 +231,13 @@ export const updateTaskProgress = catchAsync(async (req: Request, res: Response)
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this task');
   }
 
-  let progressEntry = task.progress.find((p: any) => p.subLevelId.toString() === subLevelId);
+  let progressEntry = task.progress.find((p: any) => p.subLevelId?.toString() === subLevelId);
   
   if (!progressEntry) {
     task.progress.push({
-      subLevelId,
+      subLevelId: new mongoose.Types.ObjectId(subLevelId),
       status: status || 'pending',
+      startedAt: status === 'in_progress' ? new Date() : undefined,
       completedBy: status === 'completed' ? userId : undefined,
       completedAt: status === 'completed' ? new Date() : undefined,
       notes: notes || '',
@@ -209,18 +246,50 @@ export const updateTaskProgress = catchAsync(async (req: Request, res: Response)
   } else {
     if (status) {
       progressEntry.status = status;
+      if (status === 'in_progress' && !progressEntry.startedAt) {
+        progressEntry.startedAt = new Date();
+      }
       if (status === 'completed') {
         progressEntry.completedBy = userId;
         progressEntry.completedAt = new Date();
       }
     }
-    if (notes) progressEntry.notes = notes;
-    if (photos) progressEntry.photos = photos;
+    if (notes !== undefined) progressEntry.notes = notes;
+    if (photos !== undefined) progressEntry.photos = photos;
   }
 
-  const totalSubLevels = task.inspectionLevel?.subLevels?.length || 0;
+  const inspectionLevel = await mongoose.model('InspectionLevel').findById(task.inspectionLevel)
+    .populate({
+      path: 'subLevels',
+      populate: {
+        path: 'subLevels',
+        populate: {
+          path: 'subLevels'
+        }
+      }
+    });
+
+  const getAllSubLevelIds = (subLevels: any[]): string[] => {
+    let ids: string[] = [];
+    if (!subLevels || !Array.isArray(subLevels)) return ids;
+    
+    for (const sl of subLevels) {
+      ids.push(sl._id.toString());
+      if (sl.subLevels && Array.isArray(sl.subLevels)) {
+        ids = [...ids, ...getAllSubLevelIds(sl.subLevels)];
+      }
+    }
+    return ids;
+  };
+
+  const allSubLevelIds = getAllSubLevelIds(inspectionLevel?.subLevels || []);
+  const totalSubLevels = allSubLevelIds.length;
+  
   if (totalSubLevels > 0) {
-    const completedSubLevels = task.progress.filter((p: any) => p.status === 'completed').length;
+    const completedSubLevels = task.progress.filter((p: any) => 
+      p.status === 'completed' && allSubLevelIds.includes(p.subLevelId.toString())
+    ).length;
+    
     task.overallProgress = Math.round((completedSubLevels / totalSubLevels) * 100);
   }
 
@@ -250,14 +319,70 @@ export const updateTaskProgress = catchAsync(async (req: Request, res: Response)
   await task.save();
 
   const updatedTask = await Task.findById(taskId)
-    .populate('inspectionLevel')
+    .populate({
+      path: 'inspectionLevel',
+      populate: {
+        path: 'subLevels',
+        populate: {
+          path: 'subLevels',
+          populate: {
+            path: 'subLevels'
+          }
+        }
+      }
+    })
     .populate('assignedTo', 'name email')
     .populate('createdBy', 'name email')
-    .populate('progress.completedBy', 'name email');
+    .populate('progress.completedBy', 'name email')
+    .populate('comments.user', 'name email')
+    .populate('statusHistory.changedBy', 'name email');
+
+  interface SubLevelTimeSpent {
+    [key: string]: string;
+  }
+  
+  const userProgress = updatedTask?.progress.filter((p: any) => 
+    p.completedBy && p.completedBy._id.toString() === userId?.toString() && 
+    allSubLevelIds.includes(p.subLevelId.toString())
+  ) || [];
+  
+  const userCompletionRate = totalSubLevels > 0
+    ? (userProgress.length / totalSubLevels) * 100
+    : 0;
+
+  let timeSpent = 0;
+  if (updatedTask?.statusHistory && updatedTask.statusHistory.length > 0) {
+    const startTime = new Date(updatedTask.statusHistory[0].timestamp).getTime();
+    const endTime = updatedTask.status === 'completed' 
+      ? new Date(updatedTask.statusHistory[updatedTask.statusHistory.length - 1].timestamp).getTime()
+      : Date.now();
+    timeSpent = (endTime - startTime) / (1000 * 60 * 60);
+  }
+
+  const subLevelTimeSpent: SubLevelTimeSpent = {};
+  updatedTask?.progress.forEach((p: any) => {
+    if (p.completedAt && p.startedAt) {
+      const startTime = new Date(p.startedAt).getTime();
+      const endTime = new Date(p.completedAt).getTime();
+      const time = (endTime - startTime) / (1000 * 60 * 60);
+      subLevelTimeSpent[p.subLevelId.toString()] = time.toFixed(1);
+    }
+  });
+
+  const taskWithMetrics = {
+    ...(updatedTask?.toObject() || {}),
+    taskMetrics: {
+      timeSpent: Math.round(timeSpent * 10) / 10,
+      completionRate: Math.round(userCompletionRate),
+      userProgress: userProgress.length,
+      totalSubTasks: totalSubLevels,
+      subLevelTimeSpent
+    }
+  };
 
   res.status(httpStatus.OK).json({
     status: 'success',
-    data: updatedTask
+    data: taskWithMetrics
   });
 });
 
@@ -269,11 +394,17 @@ export const getTaskDetails = catchAsync(async (req: Request, res: Response) => 
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid task ID');
   }
 
-  const task: any = await Task.findById(taskId)
+  const task = await Task.findById(taskId)
     .populate({
       path: 'inspectionLevel',
       populate: {
-        path: 'subLevels'
+        path: 'subLevels',
+        populate: {
+          path: 'subLevels',
+          populate: {
+            path: 'subLevels'
+          }
+        }
       }
     })
     .populate('assignedTo', 'name email')
@@ -291,6 +422,23 @@ export const getTaskDetails = catchAsync(async (req: Request, res: Response) => 
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this task');
   }
 
+  const getAllSubLevelIds = (subLevels: any[]): string[] => {
+    let ids: string[] = [];
+    if (!subLevels || !Array.isArray(subLevels)) return ids;
+    
+    for (const sl of subLevels) {
+      ids.push(sl._id.toString());
+      if (sl.subLevels && Array.isArray(sl.subLevels)) {
+        ids = [...ids, ...getAllSubLevelIds(sl.subLevels)];
+      }
+    }
+    return ids;
+  };
+
+  // Access the populated subLevels from the inspectionLevel
+  const populatedInspectionLevel = task.inspectionLevel as any;
+  const allSubLevelIds = getAllSubLevelIds(populatedInspectionLevel?.subLevels || []);
+  
   let timeSpent = 0;
   if (task.statusHistory && task.statusHistory.length > 0) {
     const startTime = new Date(task.statusHistory[0].timestamp).getTime();
@@ -300,12 +448,28 @@ export const getTaskDetails = catchAsync(async (req: Request, res: Response) => 
     timeSpent = (endTime - startTime) / (1000 * 60 * 60);
   }
 
+  interface SubLevelTimeSpent {
+    [key: string]: string;
+  }
+  
+  const subLevelTimeSpent: SubLevelTimeSpent = {};
+  task.progress.forEach((p: any) => {
+    if (p.completedAt && p.startedAt) {
+      const startTime = new Date(p.startedAt).getTime();
+      const endTime = new Date(p.completedAt).getTime();
+      const time = (endTime - startTime) / (1000 * 60 * 60);
+      subLevelTimeSpent[p.subLevelId.toString()] = time.toFixed(1);
+    }
+  });
+
   const userProgress = task.progress.filter((p: any) => 
-    p.completedBy && p.completedBy._id.toString() === userId?.toString()
+    p.completedBy && p.completedBy._id.toString() === userId?.toString() && 
+    allSubLevelIds.includes(p.subLevelId.toString())
   );
   
-  const userCompletionRate = task.inspectionLevel?.subLevels?.length > 0
-    ? (userProgress.length / task.inspectionLevel.subLevels.length) * 100
+  const totalSubLevels = allSubLevelIds.length;
+  const userCompletionRate = totalSubLevels > 0
+    ? (userProgress.length / totalSubLevels) * 100
     : 0;
 
   const taskWithMetrics = {
@@ -314,7 +478,8 @@ export const getTaskDetails = catchAsync(async (req: Request, res: Response) => 
       timeSpent: Math.round(timeSpent * 10) / 10,
       completionRate: Math.round(userCompletionRate),
       userProgress: userProgress.length,
-      totalSubTasks: task.inspectionLevel?.subLevels?.length || 0
+      totalSubTasks: totalSubLevels,
+      subLevelTimeSpent
     }
   };
 
@@ -332,7 +497,7 @@ export const startTask = catchAsync(async (req: Request, res: Response) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid task ID');
   }
 
-  const task: any = await Task.findById(taskId);
+  const task = await Task.findById(taskId);
   
   if (!task) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
@@ -357,7 +522,15 @@ export const startTask = catchAsync(async (req: Request, res: Response) => {
   }
 
   const updatedTask = await Task.findById(taskId)
-    .populate('inspectionLevel', 'name type priority')
+    .populate({
+      path: 'inspectionLevel',
+      populate: {
+        path: 'subLevels',
+        populate: {
+          path: 'subLevels'
+        }
+      }
+    })
     .populate('assignedTo', 'name email')
     .populate('createdBy', 'name email');
 
