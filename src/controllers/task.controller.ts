@@ -5,7 +5,20 @@ import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
 import InspectionLevel from '../../src/models/InspectionLevel';
+export const deleteTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const task = await Task.findById(req.params.id);
 
+  if (!task) {
+    return next(new ApiError('Task not found', 404));
+  }
+
+  await Task.findByIdAndDelete(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Task deleted successfully'
+  });
+});
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel } = req.body;
 

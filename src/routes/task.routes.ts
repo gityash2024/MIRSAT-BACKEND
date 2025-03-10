@@ -11,6 +11,7 @@ import {
   updateTaskStatus,
   addTaskComment,
   uploadTaskAttachment,
+  deleteTask,
 } from '../controllers/task.controller';
 
 const router = Router();
@@ -26,6 +27,8 @@ router
   )
   .get(getTasks);
 
+  
+// Add this route with the existing routes in router.route('/:id')
 router
   .route('/:id')
   .get(getTask)
@@ -33,8 +36,11 @@ router
     hasPermission('edit_tasks'),
     validate(taskValidation.updateTask),
     updateTask
+  )
+  .delete(
+    hasPermission('delete_tasks'),
+    deleteTask
   );
-
 router.put(
   '/:id/status',
   validate(taskValidation.updateStatus),

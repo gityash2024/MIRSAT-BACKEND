@@ -62,7 +62,7 @@ export interface ITask extends Document {
 }
 
 const taskProgressSchema = new Schema<ITaskProgress>({
-  subLevelId: { type: Schema.Types.ObjectId, required: true, ref: 'InspectionLevel.subLevels' },
+  subLevelId: { type: Schema.Types.ObjectId, ref: 'InspectionLevel.subLevels' },
   status: { 
     type: String, 
     enum: ['pending', 'in_progress', 'completed'],
