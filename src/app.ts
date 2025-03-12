@@ -19,7 +19,7 @@ logger.info('Initializing application...');
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: ['https://mirsat-frontend.vercel.app', 'http://localhost:5173','http://localhost:5174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','https://mirsat.mymultimeds.com'],
+  origin: ['https://mirsat-frontend.vercel.app', 'http://localhost:5173','http://localhost:5174','https://mirsat.mymultimeds.com'],
   methods: '*',
   credentials: true
 }));
