@@ -4,15 +4,36 @@ import { catchAsync } from '../utils/catchAsync';
 import { ApiError } from '../utils/ApiError';
 import InspectionLevel from '../models/InspectionLevel';
 import { pick } from 'lodash';
+import PDFDocument from 'pdfkit';
+import * as docx from 'docx';
+import { Paragraph, TextRun, Document, Packer } from 'docx';
 
-// Helper function to process and prepare sublevels for database
+
+const flattenSubLevels = <T extends { subLevels?: any[], [key: string]: any }>(
+  subLevels: T[], 
+  level = 0
+): Array<T & { nestLevel: number }> => {
+  let result: Array<T & { nestLevel: number }> = [];
+  
+  if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0) return result;
+  
+  subLevels.forEach(subLevel => {
+    result.push({ ...subLevel, nestLevel: level });
+    
+    if (subLevel.subLevels && subLevel.subLevels.length > 0) {
+      result = [...result, ...flattenSubLevels(subLevel.subLevels, level + 1)];
+    }
+  });
+  
+  return result;
+};
+
 const processSubLevels = (subLevels:any) => {
   if (!subLevels || !Array.isArray(subLevels)) return [];
 
   return subLevels.map((subLevel) => {
     const processedSubLevel = { ...subLevel };
     
-    // Process any nested sub-levels recursively
     if (subLevel.subLevels && Array.isArray(subLevel.subLevels)) {
       processedSubLevel.subLevels = processSubLevels(subLevel.subLevels);
     }
@@ -28,7 +49,6 @@ export const createInspectionLevel = catchAsync(async (req: Request, res: Respon
     updatedBy: req.user?._id
   };
   
-  // Process nested sub-levels if present
   if (inspectionData.subLevels) {
     inspectionData.subLevels = processSubLevels(inspectionData.subLevels);
   }
@@ -117,7 +137,6 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
     updatedBy: req.user?._id
   };
 
-  // Process nested sub-levels if present
   if (updateData.subLevels) {
     updateData.subLevels = processSubLevels(updateData.subLevels);
   }
@@ -133,36 +152,24 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
   res.send(updatedInspection);
 });
 
-export const deleteInspectionLevel = catchAsync(async (req: Request, res: Response) => {
-  if (!req.params.inspectionId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID is required');
-  }
+// Fixed type annotations
+interface SubLevel {
+  _id: any;
+  name: string;
+  description: string;
+  order?: number;
+  subLevels?: SubLevel[];
+  [key: string]: any;
+}
 
-  const inspection = await InspectionLevel.findById(req.params.inspectionId);
-  if (!inspection) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
-  }
-
-  if (inspection.assignedTasks && inspection.assignedTasks.length > 0) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST, 
-      'Cannot delete inspection level with associated tasks'
-    );
-  }
-
-  await inspection.deleteOne();
-  res.status(httpStatus.NO_CONTENT).send();
-});
-
-// Helper function to find a sublevel recursively at any nesting level
-const findSubLevelById:any = (subLevels:any, subLevelId:any) => {
+const findSubLevelById = (subLevels: SubLevel[], subLevelId: string): SubLevel | null => {
   for (const subLevel of subLevels) {
     if (subLevel._id.toString() === subLevelId) {
       return subLevel;
     }
     
     if (subLevel.subLevels && subLevel.subLevels.length > 0) {
-      const nestedSubLevel = findSubLevelById(subLevel.subLevels, subLevelId);
+      const nestedSubLevel: SubLevel | null = findSubLevelById(subLevel.subLevels, subLevelId);
       if (nestedSubLevel) {
         return nestedSubLevel;
       }
@@ -172,11 +179,11 @@ const findSubLevelById:any = (subLevels:any, subLevelId:any) => {
   return null;
 };
 
-export const updateSubLevel = catchAsync(async (req: Request, res: Response) => {
+export const deleteInspectionLevel = catchAsync(async (req: Request, res: Response) => {
   const { inspectionId, subLevelId } = req.params;
-  
-  if (!inspectionId || !subLevelId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and Sub Level ID are required');
+
+  if (!inspectionId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID is required');
   }
 
   const inspection = await InspectionLevel.findById(inspectionId);
@@ -184,13 +191,65 @@ export const updateSubLevel = catchAsync(async (req: Request, res: Response) => 
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  // Find the sublevel at any nesting level
+  if (subLevelId) {
+    const removeSubLevel = (subLevels: any[], targetId: string): boolean => {
+      const index = subLevels.findIndex((sl: any) => sl._id.toString() === targetId);
+      
+      if (index !== -1) {
+        subLevels.splice(index, 1);
+        return true;
+      }
+      
+      for (let i = 0; i < subLevels.length; i++) {
+        if (subLevels[i].subLevels && subLevels[i].subLevels.length > 0) {
+          const found = removeSubLevel(subLevels[i].subLevels, targetId);
+          if (found) return true;
+        }
+      }
+      
+      return false;
+    };
+    
+    const found = removeSubLevel(inspection.subLevels, subLevelId);
+    
+    if (!found) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Sub level not found');
+    }
+    
+    inspection.updatedBy = req.user?._id;
+    await inspection.save();
+    
+    res.status(httpStatus.NO_CONTENT).send();
+  } else {
+    if (inspection.assignedTasks && inspection.assignedTasks.length > 0) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST, 
+        'Cannot delete inspection level with associated tasks'
+      );
+    }
+    
+    await inspection.deleteOne();
+    res.status(httpStatus.NO_CONTENT).send();
+  }
+});
+
+export const updateSubLevel = catchAsync(async (req: Request, res: Response) => {
+  const { inspectionId, subLevelId } = req.params;
+  
+  if (!inspectionId || !subLevelId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and Sub Level ID are required');
+  }
+
+  let inspection:any = await InspectionLevel.findById(inspectionId);
+  if (!inspection) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
+  }
+
   const subLevel = findSubLevelById(inspection.subLevels, subLevelId);
   if (!subLevel) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Sub level not found');
   }
 
-  // Process nested subLevels if they exist in the request
   if (req.body.subLevels) {
     req.body.subLevels = processSubLevels(req.body.subLevels);
   }
@@ -207,6 +266,517 @@ export const updateSubLevel = catchAsync(async (req: Request, res: Response) => 
   res.send(updatedInspection);
 });
 
+export const exportInspectionLevels = catchAsync(async (req: Request, res: Response) => {
+  const { format } = req.params;
+  const filter: any = pick(req.query, ['name', 'type', 'status', 'priority']);
+  const search = req.query.search as string;
+
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  const inspections = await InspectionLevel.find(filter)
+    .populate('createdBy', 'name email')
+    .populate('updatedBy', 'name email')
+    .lean();
+  
+  if (format === 'pdf') {
+    try {
+      const doc = new PDFDocument({
+        margins: { top: 40, bottom: 50, left: 50, right: 50 },
+        size: 'A4',
+        bufferPages: true
+      });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=inspection-levels.pdf');
+      
+      doc.pipe(res);
+      
+      doc.info.Title = 'Inspection Levels Report';
+      doc.info.Author = 'Inspection System';
+      
+      const COLORS = {
+        primary: '#1F3F7A',
+        secondary: '#1F3F7A',
+        text: '#333333',
+        subText: '#666666',
+        tableHeader: '#1F3F7A',
+        tableBorder: '#E0E0E0',
+        tableRowEven: '#FFFFFF',
+        tableRowOdd: '#F5F5F5',
+        bulletPrimary: '#1F3F7A',
+        bulletSecondary: '#4A90E2'
+      };
+      
+      const FONTS = {
+        heading: 'Helvetica-Bold',
+        subheading: 'Helvetica-Bold',
+        normal: 'Helvetica',
+        italic: 'Helvetica-Oblique'
+      };
+      
+      const addHeaderToPage = () => {
+        const headerHeight = 50;
+        
+        doc.rect(50, 40, doc.page.width - 100, headerHeight)
+           .fillAndStroke(COLORS.primary, COLORS.primary);
+        
+        doc.fontSize(18)
+           .fillColor('white')
+           .font(FONTS.heading)
+           .text('Inspection Levels Report', 60, 55, { align: 'center' });
+        
+        const dateText = `Generated on: ${new Date().toLocaleDateString()}`;
+        const dateWidth = doc.widthOfString(dateText);
+        
+        doc.fontSize(9)
+           .fillColor('white')
+           .font(FONTS.normal)
+           .text(dateText, doc.page.width - 60 - dateWidth, 55, { align: 'right' });
+           
+        doc.moveDown(2);
+      };
+      
+      for (let i = 0; i < inspections.length; i++) {
+        const inspection = inspections[i];
+        
+        if (i > 0) {
+          doc.addPage();
+        }
+        
+        addHeaderToPage();
+        
+        // Property Table
+        const tableTop = doc.y + 20;
+        const tableWidth = doc.page.width - 100;
+        const colWidth1 = 150;
+        const colWidth2 = tableWidth - colWidth1;
+        const rowHeight = 30;
+        
+        // Table Header
+        doc.rect(50, tableTop, colWidth1, rowHeight)
+           .fillAndStroke(COLORS.tableHeader, COLORS.tableHeader);
+        doc.rect(50 + colWidth1, tableTop, colWidth2, rowHeight)
+           .fillAndStroke(COLORS.tableHeader, COLORS.tableHeader);
+        
+        doc.fillColor('white')
+           .fontSize(12)
+           .font(FONTS.heading)
+           .text('Property', 60, tableTop + 10)
+           .text('Value', 60 + colWidth1, tableTop + 10);
+        
+        // Table Rows
+        const addRow = (label: string, value: string, rowIndex: number) => {
+          const y = tableTop + (rowIndex * rowHeight);
+          const bgColor = rowIndex % 2 === 0 ? COLORS.tableRowEven : COLORS.tableRowOdd;
+          
+          doc.rect(50, y + rowHeight, colWidth1, rowHeight)
+             .fillAndStroke(bgColor, COLORS.tableBorder);
+          doc.rect(50 + colWidth1, y + rowHeight, colWidth2, rowHeight)
+             .fillAndStroke(bgColor, COLORS.tableBorder);
+          
+          doc.fillColor(COLORS.text)
+             .fontSize(11)
+             .font(FONTS.normal)
+             .text(label, 60, y + rowHeight + 10)
+             .text(value || 'N/A', 60 + colWidth1, y + rowHeight + 10);
+        };
+        
+        addRow('Type', inspection.type || 'N/A', 0);
+        addRow('Status', inspection.status || 'N/A', 1);
+        addRow('Priority', inspection.priority?.toString() || 'N/A', 2);
+        
+        // Description Section
+        const descriptionTop = tableTop + (4 * rowHeight) + 20;
+        
+        doc.rect(50, descriptionTop, tableWidth, 30)
+           .fillAndStroke(COLORS.secondary, COLORS.secondary);
+        
+        doc.fillColor('white')
+           .fontSize(12)
+           .font(FONTS.heading)
+           .text('Description', 60, descriptionTop + 10);
+        
+        doc.rect(50, descriptionTop + 30, tableWidth, 50)
+           .fillAndStroke(COLORS.tableRowEven, COLORS.tableBorder);
+           
+        doc.fontSize(10)
+           .fillColor(COLORS.text)
+           .font(FONTS.normal)
+           .text(inspection.description || 'No description provided', 60, descriptionTop + 40, { 
+             width: tableWidth - 20,
+             height: 40
+           });
+        
+        // Sub Levels Section
+        const subLevelsTop = descriptionTop + 100;
+        
+        doc.rect(50, subLevelsTop, tableWidth, 30)
+           .fillAndStroke(COLORS.secondary, COLORS.secondary);
+           
+        doc.fillColor('white')
+           .fontSize(12)
+           .font(FONTS.heading)
+           .text('Sub Levels:', 60, subLevelsTop + 10);
+           
+        doc.y = subLevelsTop + 40;
+        
+        if (inspection.subLevels && inspection.subLevels.length > 0) {
+          const processSubLevels = (subLevels: any[], level = 0, maxDepth = 10): void => {
+            if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0 || level >= maxDepth) {
+              return;
+            }
+            
+            for (let i = 0; i < subLevels.length; i++) {
+              const item = subLevels[i];
+              if (!item) continue;
+              
+              // Check if we need a new page
+              if (doc.y > doc.page.height - 100) {
+                doc.addPage();
+                addHeaderToPage();
+              }
+              
+              const indent = 15 * level;
+              const bulletX = 60 + indent;
+              const bulletY = doc.y + 4;
+              
+              // Draw bullet
+              if (level === 0) {
+                doc.circle(bulletX, bulletY, 3)
+                   .fill(COLORS.bulletPrimary);
+              } else {
+                doc.circle(bulletX, bulletY, 2)
+                   .fill(COLORS.bulletSecondary);
+              }
+              
+              const textX = bulletX + 10;
+              
+              // Level name
+              doc.fontSize(level === 0 ? 11 : 10)
+                 .font(level === 0 ? FONTS.subheading : FONTS.normal)
+                 .fillColor(COLORS.text);
+                 
+              const nameText = item.name || 'Unnamed';
+              doc.text(nameText, textX, doc.y, { 
+                continued: item.description ? true : false
+              });
+              
+              // Description if available
+              if (item.description) {
+                doc.font(FONTS.italic)
+                   .fillColor(COLORS.subText)
+                   .fontSize(level === 0 ? 10 : 9)
+                   .text(` - ${item.description}`);
+              } else {
+                doc.moveDown(0.5);
+              }
+              
+              // Process nested sublevels if they exist
+              if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
+                processSubLevels(item.subLevels, level + 1, maxDepth);
+              }
+            }
+          };
+          
+          processSubLevels(inspection.subLevels);
+          
+        } else {
+          doc.fontSize(11)
+             .font(FONTS.italic)
+             .fillColor(COLORS.subText)
+             .text('No sub levels defined for this inspection level.', 60, doc.y);
+        }
+      }
+      
+      // Add page numbers
+      const pageCount = doc.bufferedPageRange().count;
+      for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(i);
+        
+        const pageText = `Page ${i + 1} / ${pageCount}`;
+        const textWidth = doc.widthOfString(pageText);
+        
+        doc.fontSize(10)
+           .fillColor(COLORS.subText)
+           .text(
+             pageText,
+             (doc.page.width - textWidth) / 2,
+             doc.page.height - 30,
+             { lineBreak: false }
+           );
+      }
+      
+      doc.end();
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error generating PDF');
+    }
+  } 
+  else if (format === 'docx') {
+    try {
+      const createBorder = () => {
+        return {
+          top: { style: "single" as const, size: 1, color: "E0E0E0" },
+          bottom: { style: "single" as const, size: 1, color: "E0E0E0" },
+          left: { style: "single" as const, size: 1, color: "E0E0E0" },
+          right: { style: "single" as const, size: 1, color: "E0E0E0" }
+        };
+      };
+      
+      const titleParagraph = new Paragraph({
+        text: 'Inspection Levels Report',
+        heading: 'Heading1',
+        alignment: 'center',
+      });
+      
+      const dateParagraph = new Paragraph({
+        children: [
+          new TextRun({ 
+            text: `Generated on: ${new Date().toLocaleDateString()}`,
+            size: 18,
+            color: "666666",
+          }),
+        ],
+        alignment: "center",
+      });
+      
+      const sections: (Paragraph | docx.Table)[] = [];
+      
+      for (let index = 0; index < inspections.length; index++) {
+        const inspection = inspections[index];
+        
+        if (index > 0) {
+          sections.push(new Paragraph({ 
+            text: "", 
+            pageBreakBefore: true,
+          }));
+        }
+        
+        sections.push(new Paragraph({
+          children: [
+            new TextRun({ 
+              text: `${index + 1}. ${inspection.name || 'Unnamed'}`,
+              bold: true,
+              size: 28,
+              color: "1A237E",
+            }),
+          ],
+          shading: {
+            type: "clear",
+            fill: "F5F5F5",
+          },
+          border: createBorder(),
+          spacing: {
+            before: 200,
+            after: 200,
+          },
+        }));
+        
+        sections.push(new Paragraph({
+          text: "Inspection Details",
+          heading: "Heading3",
+        }));
+        
+        const metadataTable = new docx.Table({
+          width: {
+            size: 100,
+            type: "pct",
+          },
+          rows: [
+            new docx.TableRow({
+              tableHeader: true,
+              children: [
+                new docx.TableCell({
+                  children: [new Paragraph({
+                    text: "Property",
+                    alignment: "center",
+                  })],
+                  shading: {
+                    type: "clear",
+                    fill: "1A237E",
+                  },
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+                new docx.TableCell({
+                  children: [new Paragraph({
+                    text: "Value",
+                    alignment: "center",
+                  })],
+                  shading: {
+                    type: "clear",
+                    fill: "1A237E",
+                  },
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+              ],
+            }),
+            new docx.TableRow({
+              children: [
+                new docx.TableCell({
+                  children: [new Paragraph("Type")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+                new docx.TableCell({
+                  children: [new Paragraph(inspection.type || "N/A")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+              ],
+            }),
+            new docx.TableRow({
+              children: [
+                new docx.TableCell({
+                  children: [new Paragraph("Status")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                  shading: {
+                    type: "clear",
+                    fill: "F5F5F5",
+                  },
+                }),
+                new docx.TableCell({
+                  children: [new Paragraph(inspection.status || "N/A")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                  shading: {
+                    type: "clear",
+                    fill: "F5F5F5",
+                  },
+                }),
+              ],
+            }),
+            new docx.TableRow({
+              children: [
+                new docx.TableCell({
+                  children: [new Paragraph("Priority")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+                new docx.TableCell({
+                  children: [new Paragraph(inspection.priority?.toString() || "N/A")],
+                  verticalAlign: docx.VerticalAlign.CENTER,
+                }),
+              ],
+            }),
+          ],
+        });
+        
+        sections.push(metadataTable);
+        
+        sections.push(new Paragraph({
+          text: "Description",
+          heading: "Heading3",
+        }));
+        
+        sections.push(new Paragraph({
+          text: inspection.description || "No description provided",
+        }));
+        
+        if (inspection.subLevels && inspection.subLevels.length > 0) {
+          sections.push(new Paragraph({
+            text: "Sub Levels",
+            heading: "Heading3",
+          }));
+          
+          const processSubLevelsForDocx = (subLevels: any[], level = 0, paragraphs: Paragraph[] = [], maxDepth = 10): Paragraph[] => {
+            if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0 || level >= maxDepth) {
+              return paragraphs;
+            }
+            
+            for (const item of subLevels) {
+              if (!item) continue;
+              
+              const indent = 720 * level;
+              
+              paragraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: item.name || 'Unnamed',
+                      bold: level === 0,
+                    }),
+                    ...(item.description ? [new TextRun({
+                      text: ` - ${item.description}`,
+                    })] : []),
+                  ],
+                  bullet: {
+                    level: level,
+                  },
+                  indent: {
+                    left: indent,
+                  },
+                  spacing: {
+                    before: 100,
+                    after: 100,
+                  },
+                })
+              );
+              
+              if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
+                processSubLevelsForDocx(item.subLevels, level + 1, paragraphs, maxDepth);
+              }
+            }
+            
+            return paragraphs;
+          };
+          
+          const subLevelParagraphs = processSubLevelsForDocx(inspection.subLevels);
+          
+          sections.push(...subLevelParagraphs);
+          
+        } else {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'No sub levels defined for this inspection level.',
+                  color: "666666",
+                  italics: true,
+                }),
+              ],
+            })
+          );
+        }
+      }
+      
+      const doc = new Document({
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: {
+                  top: 1000,
+                  bottom: 1000,
+                  left: 1000,
+                  right: 1000,
+                },
+              },
+            },
+            children: [
+              titleParagraph,
+              dateParagraph,
+              ...sections,
+            ],
+          },
+        ],
+      });
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', 'attachment; filename=inspection-levels.docx');
+      
+      const buffer = await Packer.toBuffer(doc);
+      res.send(buffer);
+    } catch (err) {
+      console.error('DOCX generation error:', err);
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error generating DOCX');
+    }
+  } 
+  else {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Unsupported export format');
+  }
+});
+
 export const reorderSubLevels = catchAsync(async (req: Request, res: Response) => {
   const { inspectionId } = req.params;
   const { newOrder } = req.body;
@@ -215,13 +785,11 @@ export const reorderSubLevels = catchAsync(async (req: Request, res: Response) =
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and new order are required');
   }
 
-  const inspection :any= await InspectionLevel.findById(inspectionId);
+  const inspection:any = await InspectionLevel.findById(inspectionId);
   if (!inspection) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  // Simple reordering for top-level subLevels only
-  // For nested reordering, you would need to pass a path to the specific subLevels array
   newOrder.forEach((id: string, index: number) => {
     const subLevel = inspection.subLevels.id(id);
     if (subLevel) {

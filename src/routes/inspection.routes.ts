@@ -1,17 +1,15 @@
-
 import express from 'express';
 import { validate } from '../middleware/validate.middleware';
-import {  hasPermission, protect } from '../middleware/auth.middleware';
+import { hasPermission, protect } from '../middleware/auth.middleware';
 import * as inspectionController from '../controllers/inspection.controller';
 import * as inspectionValidation from '../validations/inspection.validation';
 
 const router = express.Router();
 
 // Create inspection level
-// Create inspection level
 router.post(
   '/',
-  protect,  // Add this first
+  protect,
   hasPermission('create_inspections'),
   inspectionController.createInspectionLevel
 );
@@ -19,15 +17,16 @@ router.post(
 // Get all inspection levels
 router.get(
   '/',
-  protect, // Add protect middleware first
+  protect,
   hasPermission('view_inspections'),
   validate(inspectionValidation.queryInspectionLevels),
   inspectionController.getInspectionLevels
 );
+
 // Get single inspection level
 router.get(
   '/:inspectionId',
-  protect,  // Add this first
+  protect,
   hasPermission('view_inspections'),
   validate(inspectionValidation.getInspectionLevel),
   inspectionController.getInspectionLevel
@@ -36,7 +35,7 @@ router.get(
 // Update inspection level
 router.patch(
   '/:inspectionId',
-  protect,  // Add this first
+  protect,
   hasPermission('edit_inspections'),
   inspectionController.updateInspectionLevel
 );
@@ -44,25 +43,38 @@ router.patch(
 // Delete inspection level
 router.delete(
   '/:inspectionId',
-  protect,  // Add this first
+  protect,
   hasPermission('delete_inspections'),
   validate(inspectionValidation.deleteInspectionLevel),
   inspectionController.deleteInspectionLevel
 );
 
-// Update sub levelEDIT_INSPECTION
+// Delete sub-level
+router.delete(
+  '/:inspectionId/sub-levels/:subLevelId',
+  protect,
+  hasPermission('delete_inspections'),
+  inspectionController.deleteInspectionLevel
+);
+
+// Update sub level
 router.patch(
   '/:inspectionId/sub-levels/:subLevelId',
-  protect,  // Add this first
+  protect,
   hasPermission('edit_inspections'),
   inspectionController.updateSubLevel
+);
+router.get(
+  '/export/:format',
+  protect,
+  hasPermission('view_inspections'),
+  inspectionController.exportInspectionLevels
 );
 
 // Reorder sub levels
 router.post(
   '/:inspectionId/sub-levels/reorder',
-  protect,  // Add this first
-
+  protect,
   hasPermission('edit_inspections'),
   inspectionController.reorderSubLevels
 );
