@@ -4,8 +4,10 @@ import {
   getUserTasks,
   getUserDashboardStats,
   updateTaskProgress,
+  updateTaskQuestionnaire,
   getTaskDetails,
-  startTask
+  startTask,
+  exportTaskReport
 } from '../controllers/UserTaskController';
 
 const router = Router();
@@ -27,5 +29,16 @@ router.post('/:taskId/start', startTask);
 
 // Update progress of a specific sub-level in a task
 router.post('/:taskId/progress/:subLevelId', updateTaskProgress);
+
+// Update progress overall for final submission
+router.post('/:taskId/progress', updateTaskProgress);
+
+// Update questionnaire responses for a task
+router.post('/:taskId/questionnaire', updateTaskQuestionnaire);
+
+// Add comment to a task functionality will be implemented in the appropriate controller
+
+// Export task report
+router.get('/:taskId/export', exportTaskReport);
 
 export default router;

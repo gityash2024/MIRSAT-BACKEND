@@ -1,13 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ITaskProgress {
-  subLevelId:any;
+  subLevelId: mongoose.Types.ObjectId;
   status: 'pending' | 'in_progress' | 'completed';
   startedAt?: Date;
   completedAt?: Date;
   completedBy?: Schema.Types.ObjectId;
   notes?: string;
   photos?: string[];
+  timeSpent?: number;
   signoff?: {
     signedBy: Schema.Types.ObjectId;
     signedAt: Date;
@@ -24,7 +25,7 @@ export interface ITask extends Document {
   priority: 'low' | 'medium' | 'high';
   deadline: Date;
   location?: string;
-  inspectionLevel: Schema.Types.ObjectId;
+  inspectionLevel: any;
   progress: ITaskProgress[];
   overallProgress: number;
   attachments: {
@@ -51,6 +52,17 @@ export interface ITask extends Document {
     }[];
     timestamp: Date;
   }[];
+  questionnaireCompleted: boolean;
+  questionnaireResponses: Record<string, any>;
+  questionnaireNotes: string;
+  questions: {
+    id?: string;
+    _id?: string;
+    text: string;
+    answerType: string;
+    options?: string[];
+    required: boolean;
+  }[];
   isActive: boolean;
   taskMetrics?: {
     timeSpent: number;
@@ -75,6 +87,7 @@ const taskProgressSchema = new Schema<ITaskProgress>({
   completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   notes: { type: String },
   photos: [{ type: String }],
+  timeSpent: { type: Number, default: 0 },
   signoff: {
     signedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     signedAt: { type: Date },
@@ -172,6 +185,24 @@ const taskSchema = new Schema<ITask>({
       type: Date,
       default: Date.now,
     },
+  }],
+  questionnaireCompleted: {
+    type: Boolean,
+    default: false
+  },
+  questionnaireResponses: {
+    type: Object,
+    default: {}
+  },
+  questionnaireNotes: {
+    type: String,
+    default: ''
+  },
+  questions: [{
+    text: String,
+    answerType: String,
+    options: [String],
+    required: Boolean
   }],
   isActive: {
     type: Boolean,
