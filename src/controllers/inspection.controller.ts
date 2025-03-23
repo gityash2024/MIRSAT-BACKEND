@@ -106,11 +106,11 @@ export const getInspectionLevels = catchAsync(async (req: Request, res: Response
 });
 
 export const getInspectionLevel = catchAsync(async (req: Request, res: Response) => {
-  if (!req.params.inspectionId) {
+  if (!req.params.id) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID is required');
   }
 
-  const inspection = await InspectionLevel.findById(req.params.inspectionId)
+  const inspection = await InspectionLevel.findById(req.params.id)
     .populate('createdBy', 'name email')
     .populate('updatedBy', 'name email')
     .populate('assignedTasks', 'title description status');
@@ -123,11 +123,11 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
 });
 
 export const updateInspectionLevel = catchAsync(async (req: Request, res: Response) => {
-  if (!req.params.inspectionId) {
+  if (!req.params.id) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID is required');
   }
 
-  const inspection = await InspectionLevel.findById(req.params.inspectionId);
+  const inspection = await InspectionLevel.findById(req.params.id);
   if (!inspection) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
@@ -180,18 +180,18 @@ const findSubLevelById = (subLevels: SubLevel[], subLevelId: string): SubLevel |
 };
 
 export const deleteInspectionLevel = catchAsync(async (req: Request, res: Response) => {
-  const { inspectionId, subLevelId } = req.params;
+  const { id, sublevelId } = req.params;
 
-  if (!inspectionId) {
+  if (!id) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID is required');
   }
 
-  const inspection = await InspectionLevel.findById(inspectionId);
+  const inspection = await InspectionLevel.findById(id);
   if (!inspection) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  if (subLevelId) {
+  if (sublevelId) {
     const removeSubLevel = (subLevels: any[], targetId: string): boolean => {
       const index = subLevels.findIndex((sl: any) => sl._id.toString() === targetId);
       
@@ -210,7 +210,7 @@ export const deleteInspectionLevel = catchAsync(async (req: Request, res: Respon
       return false;
     };
     
-    const found = removeSubLevel(inspection.subLevels, subLevelId);
+    const found = removeSubLevel(inspection.subLevels, sublevelId);
     
     if (!found) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Sub level not found');
@@ -806,4 +806,85 @@ export const reorderSubLevels = catchAsync(async (req: Request, res: Response) =
     .populate('assignedTasks', 'title description status');
 
   res.send(updatedInspection);
+});
+
+// New method to update questionnaire for an inspection level
+export const updateInspectionQuestionnaire = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { responses, notes, completed } = req.body;
+  
+  const inspection = await InspectionLevel.findById(id);
+  
+  if (!inspection) {
+    throw new ApiError('Inspection level not found', httpStatus.NOT_FOUND);
+  }
+  
+  if (responses) {
+    inspection.questionnaireResponses = responses;
+  }
+  
+  if (notes !== undefined) {
+    inspection.questionnaireNotes = notes;
+  }
+  
+  if (completed !== undefined) {
+    inspection.questionnaireCompleted = completed;
+  }
+  
+  await inspection.save();
+  
+  res.status(httpStatus.OK).send({
+    message: 'Questionnaire updated successfully',
+    data: {
+      id: inspection._id,
+      questionnaireCompleted: inspection.questionnaireCompleted,
+      questionnaireResponses: inspection.questionnaireResponses,
+      questionnaireNotes: inspection.questionnaireNotes
+    }
+  });
+});
+
+// New method to get questionnaire for an inspection level
+export const getInspectionQuestionnaire = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const inspection = await InspectionLevel.findById(id)
+    .select('questions questionnaireResponses questionnaireCompleted questionnaireNotes');
+  
+  if (!inspection) {
+    throw new ApiError('Inspection level not found', httpStatus.NOT_FOUND);
+  }
+  
+  res.status(httpStatus.OK).send({
+    data: {
+      id: inspection._id,
+      questions: inspection.questions || [],
+      questionnaireResponses: inspection.questionnaireResponses || {},
+      questionnaireCompleted: inspection.questionnaireCompleted || false,
+      questionnaireNotes: inspection.questionnaireNotes || ''
+    }
+  });
+});
+
+// New method to add or update questions for an inspection level
+export const updateInspectionQuestions = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { questions } = req.body;
+  
+  const inspection = await InspectionLevel.findById(id);
+  
+  if (!inspection) {
+    throw new ApiError('Inspection level not found', httpStatus.NOT_FOUND);
+  }
+  
+  inspection.questions = questions;
+  await inspection.save();
+  
+  res.status(httpStatus.OK).send({
+    message: 'Questions updated successfully',
+    data: {
+      id: inspection._id,
+      questions: inspection.questions
+    }
+  });
 });

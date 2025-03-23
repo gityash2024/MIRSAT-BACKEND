@@ -9,6 +9,7 @@ import PDFDocument from 'pdfkit';
 import * as ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
+import InspectionLevel from '../models/InspectionLevel';
 
 interface QueryFilters {
   [key: string]: any;
@@ -388,10 +389,20 @@ export const updateTaskQuestionnaire = catchAsync(async (req: Request, res: Resp
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this task');
   }
 
-  task.questionnaireResponses = responses || {};
-  task.questionnaireCompleted = completed || false;
-  task.questionnaireNotes = notes || '';
+  // Get the inspection level associated with this task
+  const inspectionLevel = await InspectionLevel.findById(task.inspectionLevel);
+  if (!inspectionLevel) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
+  }
+
+  // Update the inspection level questionnaire instead of the task
+  inspectionLevel.questionnaireResponses = responses || {};
+  inspectionLevel.questionnaireCompleted = completed || false;
+  inspectionLevel.questionnaireNotes = notes || '';
   
+  await inspectionLevel.save();
+
+  // Update the task status if needed
   if (task.status === 'pending' && completed) {
     task.status = 'in_progress';
     
@@ -401,9 +412,9 @@ export const updateTaskQuestionnaire = catchAsync(async (req: Request, res: Resp
       comment: 'Pre-inspection questionnaire completed',
       timestamp: new Date()
     });
+    
+    await task.save();
   }
-
-  await task.save();
 
   const updatedTask = await getPopulatedTask(taskId, userId);
 
@@ -1242,7 +1253,7 @@ async function generateTaskExcelContent(workbook: ExcelJS.Workbook, task: any): 
                     item.status === 'partial_compliance' || item.status === 'Partial Compliance' ? 'FFC107' : 
                     item.status === 'not_applicable' || item.status === 'Not Applicable' ? 'BDBDBD' : 'F44336' 
             }
-          };
+          }
         }
       }
     });
@@ -1369,14 +1380,16 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     }
   }
   
-  if (task.questionnaireResponses && task.questions) {
-    Object.entries(task.questionnaireResponses).forEach(([key, value]) => {
+  // Add questionnaire data from the inspection level instead of task
+  if (task.inspectionLevel && task.inspectionLevel.questionnaireResponses && task.inspectionLevel.questions) {
+    const inspectionLevel = task.inspectionLevel;
+    Object.entries(inspectionLevel.questionnaireResponses).forEach(([key, value]) => {
       if (!key.includes('-')) return;
       
       const questionId = key.split('-')[1];
       if (!questionId) return;
       
-      const question = task.questions.find((q: any) => 
+      const question = inspectionLevel.questions.find((q: any) => 
         q && (
           (q._id && q._id.toString() === questionId) || 
           (q.id && q.id.toString() === questionId)
@@ -1396,8 +1409,20 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     });
   }
 
+  const taskObject = task.toObject();
+  
+  // Add questionnaire data from inspection level to maintain backward compatibility
+  if (task.inspectionLevel) {
+    // Use type assertion to avoid TypeScript errors
+    const taskObjectWithQuestionnaire = taskObject as any;
+    taskObjectWithQuestionnaire.questions = task.inspectionLevel.questions || [];
+    taskObjectWithQuestionnaire.questionnaireResponses = task.inspectionLevel.questionnaireResponses || {};
+    taskObjectWithQuestionnaire.questionnaireCompleted = task.inspectionLevel.questionnaireCompleted || false;
+    taskObjectWithQuestionnaire.questionnaireNotes = task.inspectionLevel.questionnaireNotes || '';
+  }
+
   const taskWithMetrics = {
-    ...task.toObject(),
+    ...taskObject,
     taskMetrics: {
       timeSpent: Math.round(timeSpent * 10) / 10,
       completionRate: Math.round(userCompletionRate),

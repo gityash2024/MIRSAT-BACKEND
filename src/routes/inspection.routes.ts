@@ -1,82 +1,50 @@
-import express from 'express';
+import { Router } from 'express';
+import { protect, hasPermission } from '../middleware/auth.middleware';
+import {
+  createInspectionLevel,
+  getInspectionLevels,
+  getInspectionLevel,
+  updateInspectionLevel,
+  deleteInspectionLevel,
+  updateSubLevel,
+  exportInspectionLevels,
+  reorderSubLevels,
+  updateInspectionQuestionnaire,
+  getInspectionQuestionnaire,
+  updateInspectionQuestions
+} from '../controllers/inspection.controller';
 import { validate } from '../middleware/validate.middleware';
-import { hasPermission, protect } from '../middleware/auth.middleware';
-import * as inspectionController from '../controllers/inspection.controller';
-import * as inspectionValidation from '../validations/inspection.validation';
+import { upload } from '../services/upload.service';
 
-const router = express.Router();
+const router = Router();
 
-// Create inspection level
-router.post(
-  '/',
-  protect,
-  hasPermission('create_inspections'),
-  inspectionController.createInspectionLevel
-);
+router.use(protect);
 
-// Get all inspection levels
-router.get(
-  '/',
-  protect,
-  hasPermission('view_inspections'),
-  validate(inspectionValidation.queryInspectionLevels),
-  inspectionController.getInspectionLevels
-);
+router.route('/')
+  .post(hasPermission('create_inspections'), createInspectionLevel)
+  .get(getInspectionLevels);
 
-// Get single inspection level
-router.get(
-  '/:inspectionId',
-  protect,
-  hasPermission('view_inspections'),
-  validate(inspectionValidation.getInspectionLevel),
-  inspectionController.getInspectionLevel
-);
+router.route('/:id')
+  .get(getInspectionLevel)
+  .put(hasPermission('edit_inspections'), updateInspectionLevel)
+  .delete(hasPermission('delete_inspections'), deleteInspectionLevel);
 
-// Update inspection level
-router.patch(
-  '/:inspectionId',
-  protect,
-  hasPermission('edit_inspections'),
-  inspectionController.updateInspectionLevel
-);
+router.route('/export/:format')
+  .get(hasPermission('view_inspections'), exportInspectionLevels);
 
-// Delete inspection level
-router.delete(
-  '/:inspectionId',
-  protect,
-  hasPermission('delete_inspections'),
-  validate(inspectionValidation.deleteInspectionLevel),
-  inspectionController.deleteInspectionLevel
-);
+router.route('/:id/sublevels/:sublevelId')
+  .put(hasPermission('edit_inspections'), updateSubLevel)
+  .delete(hasPermission('edit_inspections'), deleteInspectionLevel);
 
-// Delete sub-level
-router.delete(
-  '/:inspectionId/sub-levels/:subLevelId',
-  protect,
-  hasPermission('delete_inspections'),
-  inspectionController.deleteInspectionLevel
-);
+router.route('/:id/sublevels/reorder')
+  .post(hasPermission('edit_inspections'), reorderSubLevels);
 
-// Update sub level
-router.patch(
-  '/:inspectionId/sub-levels/:subLevelId',
-  protect,
-  hasPermission('edit_inspections'),
-  inspectionController.updateSubLevel
-);
-router.get(
-  '/export/:format',
-  protect,
-  hasPermission('view_inspections'),
-  inspectionController.exportInspectionLevels
-);
+// New routes for questionnaire management
+router.route('/:id/questionnaire')
+  .get(getInspectionQuestionnaire)
+  .post(updateInspectionQuestionnaire);
 
-// Reorder sub levels
-router.post(
-  '/:inspectionId/sub-levels/reorder',
-  protect,
-  hasPermission('edit_inspections'),
-  inspectionController.reorderSubLevels
-);
+router.route('/:id/questions')
+  .post(hasPermission('edit_inspections'), updateInspectionQuestions);
 
 export default router;

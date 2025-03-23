@@ -52,17 +52,6 @@ export interface ITask extends Document {
     }[];
     timestamp: Date;
   }[];
-  questionnaireCompleted: boolean;
-  questionnaireResponses: Record<string, any>;
-  questionnaireNotes: string;
-  questions: {
-    id?: string;
-    _id?: string;
-    text: string;
-    answerType: string;
-    options?: string[];
-    required: boolean;
-  }[];
   isActive: boolean;
   taskMetrics?: {
     timeSpent: number;
@@ -185,24 +174,6 @@ const taskSchema = new Schema<ITask>({
       type: Date,
       default: Date.now,
     },
-  }],
-  questionnaireCompleted: {
-    type: Boolean,
-    default: false
-  },
-  questionnaireResponses: {
-    type: Object,
-    default: {}
-  },
-  questionnaireNotes: {
-    type: String,
-    default: ''
-  },
-  questions: [{
-    text: String,
-    answerType: String,
-    options: [String],
-    required: Boolean
   }],
   isActive: {
     type: Boolean,

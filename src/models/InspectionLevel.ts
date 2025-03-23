@@ -55,6 +55,17 @@ export interface IInspectionLevel extends Document {
     }[];
     timestamp: Date;
   }[];
+  questions: {
+    id?: string;
+    _id?: string;
+    text: string;
+    answerType: string;
+    options?: string[];
+    required: boolean;
+  }[];
+  questionnaireResponses?: Record<string, any>;
+  questionnaireCompleted?: boolean;
+  questionnaireNotes?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -138,6 +149,24 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
     }],
     timestamp: { type: Date, default: Date.now }
   }],
+  questions: [{
+    text: String,
+    answerType: String,
+    options: [String],
+    required: Boolean
+  }],
+  questionnaireResponses: {
+    type: Object,
+    default: {}
+  },
+  questionnaireCompleted: {
+    type: Boolean,
+    default: false
+  },
+  questionnaireNotes: {
+    type: String,
+    default: ''
+  },
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true,

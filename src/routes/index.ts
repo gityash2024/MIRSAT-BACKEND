@@ -8,6 +8,7 @@ import inspectionRoutes from './inspection.routes';
 import userTaskRoutes from './userTask.routes';
 import DasboardRoutes from './dashboard.routes';
 import ReportsRoutes from './reports.routes';
+import questionLibraryRoutes from './questionLibrary.routes';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/inspection',inspectionRoutes);
 router.use('/user-tasks', userTaskRoutes);
 router.use('/dashboard', DasboardRoutes);
 router.use('/reports', ReportsRoutes);
+router.use('/question-library', questionLibraryRoutes);
 
 export default router;
