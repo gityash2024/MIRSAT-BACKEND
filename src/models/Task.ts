@@ -21,6 +21,7 @@ export interface ITask extends Document {
   description: string;
   assignedTo: Schema.Types.ObjectId[];
   createdBy: Schema.Types.ObjectId;
+  asset?: Schema.Types.ObjectId;
   status: 'pending' | 'in_progress' | 'completed' | 'incomplete' | 'partially_completed';
   priority: 'low' | 'medium' | 'high';
   deadline: Date;
@@ -103,6 +104,10 @@ const taskSchema = new Schema<ITask>({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
+  },
+  asset: {
+    type: Schema.Types.ObjectId,
+    ref: 'Asset',
   },
   status: {
     type: String,

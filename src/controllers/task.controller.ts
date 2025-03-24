@@ -20,7 +20,7 @@ export const deleteTask = catchAsync(async (req: Request, res: Response, next: N
   });
 });
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel } = req.body;
+  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel, asset } = req.body;
 
   const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
   if (users.length !== assignedTo.length) {
@@ -49,46 +49,43 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
 
   // Create progress entries for all sub-levels
   const allSubLevels = flattenSubLevels(inspection.subLevels);
-  const progress = allSubLevels.map((sl:any) => ({
-    subLevel: sl._id,
-    subLevelName: sl.name,
-    status: 'pending',
-    completedAt: null,
-    completedBy: null,
-    signoff: {
-      required: sl.requiresSignoff || false,
-      signed: false,
-      signedBy: null,
-      signedAt: null
-    },
-    comments: []
+  const progressEntries = allSubLevels.map((sl:any) => ({
+    subLevelId: sl._id,
+    status: 'pending'
   }));
 
-  const task = await Task.create({
+  // Create new task with all fields
+  const newTask = new Task({
     title,
     description,
-    inspectionLevel,
     assignedTo,
+    createdBy: req.user._id,
     priority,
     deadline,
     location,
+    inspectionLevel,
+    asset,  // Add the asset field
+    progress: progressEntries,
     attachments,
-    createdBy: req.user!._id,
-    progress
+    statusHistory: [{
+      status: 'pending',
+      changedBy: req.user._id,
+      comment: 'Task created',
+      timestamp: new Date()
+    }]
   });
 
-  const populatedTask = await Task.findById(task._id)
+  await newTask.save();
+  
+  const populatedTask = await Task.findById(newTask._id)
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
-    .populate('inspectionLevel', 'name type priority subLevels')
-    .populate('progress.completedBy', 'name email')
-    .populate('progress.signoff.signedBy', 'name email')
-    .populate('comments.user', 'name email')
-    .populate('statusHistory.changedBy', 'name email');
+    .populate('asset', 'uniqueId type displayName');  // Populate the asset field
 
   res.status(201).json({
     success: true,
-    data: populatedTask,
+    message: 'Task created successfully',
+    data: populatedTask
   });
 });
 export const getTasks = catchAsync(async (req: Request, res: Response) => {
@@ -115,6 +112,11 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     query.priority = req.query.priority;
   }
 
+  // Add asset filter
+  if (req.query.asset) {
+    query.asset = req.query.asset;
+  }
+
   if (req.user!.role !== 'admin') {
     query.assignedTo = req.user!._id;
   }
@@ -124,6 +126,7 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
     .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('asset', 'uniqueId type displayName')
     .populate('progress.completedBy', 'name email')
     .populate('progress.signoff.signedBy', 'name email')
     .sort('-createdAt')
@@ -147,6 +150,7 @@ export const getTask = catchAsync(async (req: Request, res: Response, next: Next
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
     .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('asset', 'uniqueId type displayName')
     .populate('progress.completedBy', 'name email')
     .populate('progress.signoff.signedBy', 'name email')
     .populate('comments.user', 'name email')
@@ -163,35 +167,50 @@ export const getTask = catchAsync(async (req: Request, res: Response, next: Next
 });
 
 export const updateTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const updates = req.body;
-  const task = await Task.findById(req.params.id);
+  const { 
+    title, 
+    description, 
+    assignedTo, 
+    priority, 
+    deadline, 
+    location, 
+    status,
+    asset
+  } = req.body;
 
+  const task = await Task.findById(req.params.id);
   if (!task) {
     return next(new ApiError('Task not found', 404));
   }
 
-  if (updates.assignedTo) {
-    const users = await User.find({ _id: { $in: updates.assignedTo }, isActive: true });
-    if (users.length !== updates.assignedTo.length) {
+  // Update the task with new data
+  if (title) task.title = title;
+  if (description) task.description = description;
+  if (priority) task.priority = priority;
+  if (deadline) task.deadline = new Date(deadline);
+  if (location) task.location = location;
+  if (asset) task.asset = asset;
+
+  if (assignedTo) {
+    const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
+    if (users.length !== assignedTo.length) {
       return next(new ApiError('One or more assigned users are invalid or inactive', 400));
     }
+    
+    task.assignedTo = assignedTo as any;
   }
 
-  Object.assign(task, updates);
   await task.save();
 
-  const updatedTask = await Task.findById(task._id)
+  const updatedTask = await Task.findById(req.params.id)
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
-    .populate('inspectionLevel', 'name type priority subLevels')
-    .populate('progress.completedBy', 'name email')
-    .populate('progress.signoff.signedBy', 'name email')
-    .populate('comments.user', 'name email')
-    .populate('statusHistory.changedBy', 'name email');
+    .populate('asset', 'uniqueId type displayName');  // Populate the asset field
 
   res.status(200).json({
     success: true,
-    data: updatedTask,
+    message: 'Task updated successfully',
+    data: updatedTask
   });
 });
 
@@ -277,6 +296,7 @@ export const uploadTaskAttachment = catchAsync(async (req: Request, res: Respons
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email')
     .populate('inspectionLevel', 'name type priority subLevels')
+    .populate('asset', 'uniqueId type displayName')
     .populate('progress.completedBy', 'name email')
     .populate('progress.signoff.signedBy', 'name email')
     .populate('comments.user', 'name email')
