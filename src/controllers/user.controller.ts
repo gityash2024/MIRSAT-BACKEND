@@ -69,7 +69,7 @@ export const getUser = catchAsync(async (req: Request, res: Response, next: Next
 });
 
 export const updateUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { name, email, role, permissions, isActive } = req.body;
+  const { name, email, role, permissions, isActive, phone, address, emergencyContact } = req.body;
 
   const user = await User.findById(req.params.id);
 
@@ -100,6 +100,9 @@ export const updateUser = catchAsync(async (req: Request, res: Response, next: N
   user.role = role || user.role;
   user.permissions = permissions || user.permissions;
   user.isActive = isActive !== undefined ? isActive : user.isActive;
+  user.phone = phone || user.phone;
+  user.address = address || user.address;
+  user.emergencyContact = emergencyContact || user.emergencyContact;
 
   const updatedUser = await user.save();
 

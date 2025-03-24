@@ -13,6 +13,9 @@ export interface IUser extends Document {
   passwordResetToken?: string;
   passwordResetExpires?: Date;
   createdBy?: Schema.Types.ObjectId;
+  phone?: string;
+  address?: string;
+  emergencyContact?: string;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -45,6 +48,18 @@ const userSchema = new Schema(
     department: {
       type: String,
       enum: ['Field Operations', 'Operations Management', 'Administration'],
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    address: {
+      type: String,
+      trim: true,
+    },
+    emergencyContact: {
+      type: String,
+      trim: true,
     },
     permissions: [{
         type: String,
