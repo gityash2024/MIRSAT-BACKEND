@@ -234,7 +234,16 @@ export const deleteInspectionLevel = catchAsync(async (req: Request, res: Respon
 });
 
 export const updateSubLevel = catchAsync(async (req: Request, res: Response) => {
-  const { inspectionId, subLevelId } = req.params;
+  // Fix parameter extraction to match the route definition
+  const inspectionId = req.params.id;
+  const subLevelId = req.params.sublevelId;
+  
+  console.log('Update sub-level request received:', { 
+    params: req.params,
+    inspectionId,
+    subLevelId,
+    body: req.body
+  });
   
   if (!inspectionId || !subLevelId) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and Sub Level ID are required');
@@ -253,6 +262,22 @@ export const updateSubLevel = catchAsync(async (req: Request, res: Response) => 
   if (req.body.subLevels) {
     req.body.subLevels = processSubLevels(req.body.subLevels);
   }
+
+  // Log what we're updating
+  console.log('Updating sub-level:', {
+    inspectionId,
+    subLevelId,
+    currentValues: {
+      name: subLevel.name,
+      description: subLevel.description,
+      order: subLevel.order
+    },
+    newValues: {
+      name: req.body.name,
+      description: req.body.description,
+      order: req.body.order
+    }
+  });
 
   Object.assign(subLevel, req.body);
   inspection.updatedBy = req.user?._id;
