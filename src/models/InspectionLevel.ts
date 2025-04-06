@@ -62,6 +62,7 @@ export interface IInspectionLevel extends Document {
     answerType: string;
     options?: string[];
     required: boolean;
+    levelId?: Schema.Types.ObjectId | string;
   }[];
   questionnaireResponses?: Record<string, any>;
   questionnaireCompleted?: boolean;
@@ -71,7 +72,6 @@ export interface IInspectionLevel extends Document {
   updatedAt: Date;
 }
 
-// Create subLevelSchema with recursive referencing for nested structure
 const subLevelSchema = new Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
@@ -81,14 +81,24 @@ const subLevelSchema = new Schema({
   completedBy: { type: Schema.Types.ObjectId, ref: 'User' }
 });
 
-// Add the self-reference for nested subLevels
 subLevelSchema.add({
   subLevels: [subLevelSchema]
 });
 
-// Important settings for proper serialization and deserialization
 subLevelSchema.set('toJSON', { virtuals: true });
 subLevelSchema.set('toObject', { virtuals: true });
+
+const questionSchema = new Schema({
+  text: String,
+  answerType: String,
+  options: [String],
+  required: Boolean,
+  levelId: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'InspectionLevel',
+    default: null
+  }
+});
 
 const inspectionLevelSchema = new Schema<IInspectionLevel>({
   name: { type: String, required: true, trim: true },
@@ -96,7 +106,7 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   type: { 
     type: String, 
     required: true,
-    enum: ['safety', 'environmental', 'operational', 'quality']
+    enum: ['safety', 'environmental', 'operational', 'quality', 'yacht_chartering', 'marina_operator', 'tourism_agent']
   },
   status: {
     type: String,
@@ -149,12 +159,7 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
     }],
     timestamp: { type: Date, default: Date.now }
   }],
-  questions: [{
-    text: String,
-    answerType: String,
-    options: [String],
-    required: Boolean
-  }],
+  questions: [questionSchema],
   questionnaireResponses: {
     type: Object,
     default: {}
@@ -174,7 +179,6 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   toObject: { virtuals: true }
 });
 
-// Add indexes for better query performance
 inspectionLevelSchema.index({ name: 1 });
 inspectionLevelSchema.index({ type: 1 });
 inspectionLevelSchema.index({ status: 1 });

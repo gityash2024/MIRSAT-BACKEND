@@ -1,3 +1,4 @@
+// controllers/asset.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { Asset } from '../models/Asset';
 import { ApiError } from '../utils/ApiError';
@@ -5,9 +6,8 @@ import { catchAsync } from '../utils/catchAsync';
 import ExcelJS from 'exceljs';
 
 export const createAsset = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { uniqueId, type, displayName } = req.body;
+  const { uniqueId, type, displayName, city, location } = req.body;
 
-  // Check if asset already exists with the same uniqueId
   const existingAsset = await Asset.findOne({ uniqueId });
   if (existingAsset) {
     return next(new ApiError('Asset with this ID already exists', 400));
@@ -17,6 +17,8 @@ export const createAsset = catchAsync(async (req: Request, res: Response, next: 
     uniqueId,
     type,
     displayName,
+    city,
+    location,
     createdBy: req.user!._id,
   });
 
@@ -27,7 +29,7 @@ export const createAsset = catchAsync(async (req: Request, res: Response, next: 
 });
 
 export const getAssets = catchAsync(async (req: Request, res: Response) => {
-  const { page = 1, limit = 10, search, type } = req.query;
+  const { page = 1, limit = 10, search, type, city, location } = req.query;
   
   const query: any = { isActive: true };
   
@@ -35,11 +37,21 @@ export const getAssets = catchAsync(async (req: Request, res: Response) => {
     query.$or = [
       { displayName: { $regex: search, $options: 'i' } },
       { type: { $regex: search, $options: 'i' } },
+      { city: { $regex: search, $options: 'i' } },
+      { location: { $regex: search, $options: 'i' } },
     ];
   }
   
   if (type) {
     query.type = type;
+  }
+
+  if (city) {
+    query.city = city;
+  }
+
+  if (location) {
+    query.location = location;
   }
 
   const pageNumber = parseInt(page as string, 10);
@@ -78,7 +90,7 @@ export const getAsset = catchAsync(async (req: Request, res: Response, next: Nex
 });
 
 export const updateAsset = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { uniqueId, type, displayName } = req.body;
+  const { uniqueId, type, displayName, city, location } = req.body;
   
   let asset = await Asset.findById(req.params.id);
   
@@ -86,7 +98,6 @@ export const updateAsset = catchAsync(async (req: Request, res: Response, next: 
     return next(new ApiError('Asset not found', 404));
   }
   
-  // Check if uniqueId is being changed and if it already exists on another asset
   if (uniqueId !== asset.uniqueId) {
     const existingAsset = await Asset.findOne({ uniqueId, _id: { $ne: req.params.id } });
     if (existingAsset) {
@@ -100,6 +111,8 @@ export const updateAsset = catchAsync(async (req: Request, res: Response, next: 
       uniqueId,
       type,
       displayName,
+      city,
+      location,
       updatedBy: req.user!._id,
     },
     { new: true, runValidators: true }
@@ -136,39 +149,37 @@ export const exportAssets = catchAsync(async (req: Request, res: Response) => {
     .populate('createdBy', 'name email')
     .sort({ uniqueId: 1 });
     
-  // Create Excel workbook and worksheet
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Assets');
   
-  // Add headers
   worksheet.columns = [
     { header: 'Unique ID', key: 'uniqueId', width: 15 },
     { header: 'Type', key: 'type', width: 25 },
-    { header: 'Display name', key: 'displayName', width: 30 }
+    { header: 'Display name', key: 'displayName', width: 30 },
+    { header: 'City', key: 'city', width: 25 },
+    { header: 'Location', key: 'location', width: 30 }
   ];
   
-  // Add rows
   assets.forEach(asset => {
     worksheet.addRow({
       uniqueId: asset.uniqueId,
       type: asset.type,
-      displayName: asset.displayName
+      displayName: asset.displayName,
+      city: asset.city,
+      location: asset.location
     });
   });
   
-  // Add styling to header row
   worksheet.getRow(1).font = { bold: true };
   worksheet.getRow(1).fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF1A237E' } // Matching the app theme color
+    fgColor: { argb: 'FF1A237E' }
   };
   worksheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
   
-  // Set response headers
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=assets.xlsx');
   
-  // Write to response
   await workbook.xlsx.write(res);
-}); 
+});

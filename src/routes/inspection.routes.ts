@@ -11,7 +11,8 @@ import {
   reorderSubLevels,
   updateInspectionQuestionnaire,
   getInspectionQuestionnaire,
-  updateInspectionQuestions
+  updateInspectionQuestions,
+  getQuestionsByLevel
 } from '../controllers/inspection.controller';
 import { validate } from '../middleware/validate.middleware';
 import { upload } from '../services/upload.service';
@@ -39,12 +40,14 @@ router.route('/:id/sublevels/:sublevelId')
 router.route('/:id/sublevels/reorder')
   .post(hasPermission('edit_inspections'), reorderSubLevels);
 
-// New routes for questionnaire management
 router.route('/:id/questionnaire')
   .get(getInspectionQuestionnaire)
   .post(updateInspectionQuestionnaire);
 
 router.route('/:id/questions')
   .post(hasPermission('edit_inspections'), updateInspectionQuestions);
+
+router.route('/:id/level/:levelId/questions')
+  .get(getQuestionsByLevel);
 
 export default router;

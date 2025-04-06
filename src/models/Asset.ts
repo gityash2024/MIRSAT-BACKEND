@@ -1,9 +1,12 @@
+// models/Asset.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IAsset extends Document {
   uniqueId: number;
   type: string;
   displayName: string;
+  city: string;
+  location: string;
   createdBy: Schema.Types.ObjectId;
   updatedBy?: Schema.Types.ObjectId;
   createdAt: Date;
@@ -24,6 +27,16 @@ const assetSchema = new Schema<IAsset>(
       trim: true,
     },
     displayName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    city: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    location: {
       type: String,
       required: true,
       trim: true,
@@ -49,5 +62,7 @@ const assetSchema = new Schema<IAsset>(
 
 assetSchema.index({ uniqueId: 1 });
 assetSchema.index({ type: 1 });
+assetSchema.index({ city: 1 });
+assetSchema.index({ location: 1 });
 
-export const Asset = mongoose.model<IAsset>('Asset', assetSchema); 
+export const Asset = mongoose.model<IAsset>('Asset', assetSchema);

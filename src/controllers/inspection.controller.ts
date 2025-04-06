@@ -7,7 +7,17 @@ import { pick } from 'lodash';
 import PDFDocument from 'pdfkit';
 import * as docx from 'docx';
 import { Paragraph, TextRun, Document, Packer } from 'docx';
+import mongoose from 'mongoose';
 
+interface IQuestion {
+  id?: string;
+  _id?: string;
+  text: string;
+  answerType: string;
+  options?: string[];
+  required: boolean;
+  levelId?: mongoose.Types.ObjectId | string | undefined;
+}
 
 const flattenSubLevels = <T extends { subLevels?: any[], [key: string]: any }>(
   subLevels: T[], 
@@ -51,6 +61,21 @@ export const createInspectionLevel = catchAsync(async (req: Request, res: Respon
   
   if (inspectionData.subLevels) {
     inspectionData.subLevels = processSubLevels(inspectionData.subLevels);
+  }
+  
+  if (inspectionData.questions && Array.isArray(inspectionData.questions)) {
+    inspectionData.questions = inspectionData.questions.map((question: any) => {
+      if (question.levelId) {
+        try {
+          question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+            : undefined;
+        } catch (err) {
+          question.levelId = undefined;
+        }
+      }
+      return question;
+    });
   }
   
   const inspection = await InspectionLevel.create(inspectionData);
@@ -119,7 +144,34 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  res.send(inspection);
+  const processLevels = (levels: any[]) => {
+    if (!levels) return [];
+    
+    return levels.map((level: any) => {
+      const levelObj = level.toObject ? level.toObject() : level;
+      
+      if (levelObj.subLevels && levelObj.subLevels.length > 0) {
+        levelObj.subLevels = processLevels(levelObj.subLevels);
+      }
+      
+      return {
+        ...levelObj,
+        id: levelObj._id
+      };
+    });
+  };
+  
+  const result = inspection.toObject();
+  result.subLevels = processLevels(result.subLevels);
+  
+  if (result.questions && Array.isArray(result.questions)) {
+    result.questions = result.questions.map(q => ({
+      ...q,
+      id: q._id || q.id
+    }));
+  }
+
+  res.send(result);
 });
 
 export const updateInspectionLevel = catchAsync(async (req: Request, res: Response) => {
@@ -140,6 +192,21 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
   if (updateData.subLevels) {
     updateData.subLevels = processSubLevels(updateData.subLevels);
   }
+  
+  if (updateData.questions && Array.isArray(updateData.questions)) {
+    updateData.questions = updateData.questions.map((question: any) => {
+      if (question.levelId) {
+        try {
+          question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+            : undefined;
+        } catch (err) {
+          question.levelId = undefined;
+        }
+      }
+      return question;
+    });
+  }
 
   Object.assign(inspection, updateData);
   await inspection.save();
@@ -152,7 +219,6 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
   res.send(updatedInspection);
 });
 
-// Fixed type annotations
 interface SubLevel {
   _id: any;
   name: string;
@@ -216,6 +282,16 @@ export const deleteInspectionLevel = catchAsync(async (req: Request, res: Respon
       throw new ApiError(httpStatus.NOT_FOUND, 'Sub level not found');
     }
     
+    if (inspection.questions && Array.isArray(inspection.questions)) {
+      const updatedQuestions = inspection.questions.map((q: any) => {
+        if (q.levelId && q.levelId.toString() === sublevelId) {
+          return { ...q, levelId: undefined };
+        }
+        return q;
+      });
+      inspection.questions = updatedQuestions;
+    }
+    
     inspection.updatedBy = req.user?._id;
     await inspection.save();
     
@@ -234,16 +310,8 @@ export const deleteInspectionLevel = catchAsync(async (req: Request, res: Respon
 });
 
 export const updateSubLevel = catchAsync(async (req: Request, res: Response) => {
-  // Fix parameter extraction to match the route definition
   const inspectionId = req.params.id;
   const subLevelId = req.params.sublevelId;
-  
-  console.log('Update sub-level request received:', { 
-    params: req.params,
-    inspectionId,
-    subLevelId,
-    body: req.body
-  });
   
   if (!inspectionId || !subLevelId) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and Sub Level ID are required');
@@ -262,22 +330,6 @@ export const updateSubLevel = catchAsync(async (req: Request, res: Response) => 
   if (req.body.subLevels) {
     req.body.subLevels = processSubLevels(req.body.subLevels);
   }
-
-  // Log what we're updating
-  console.log('Updating sub-level:', {
-    inspectionId,
-    subLevelId,
-    currentValues: {
-      name: subLevel.name,
-      description: subLevel.description,
-      order: subLevel.order
-    },
-    newValues: {
-      name: req.body.name,
-      description: req.body.description,
-      order: req.body.order
-    }
-  });
 
   Object.assign(subLevel, req.body);
   inspection.updatedBy = req.user?._id;
@@ -375,14 +427,12 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         
         addHeaderToPage();
         
-        // Property Table
         const tableTop = doc.y + 20;
         const tableWidth = doc.page.width - 100;
         const colWidth1 = 150;
         const colWidth2 = tableWidth - colWidth1;
         const rowHeight = 30;
         
-        // Table Header
         doc.rect(50, tableTop, colWidth1, rowHeight)
            .fillAndStroke(COLORS.tableHeader, COLORS.tableHeader);
         doc.rect(50 + colWidth1, tableTop, colWidth2, rowHeight)
@@ -394,7 +444,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
            .text('Property', 60, tableTop + 10)
            .text('Value', 60 + colWidth1, tableTop + 10);
         
-        // Table Rows
         const addRow = (label: string, value: string, rowIndex: number) => {
           const y = tableTop + (rowIndex * rowHeight);
           const bgColor = rowIndex % 2 === 0 ? COLORS.tableRowEven : COLORS.tableRowOdd;
@@ -415,7 +464,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         addRow('Status', inspection.status || 'N/A', 1);
         addRow('Priority', inspection.priority?.toString() || 'N/A', 2);
         
-        // Description Section
         const descriptionTop = tableTop + (4 * rowHeight) + 20;
         
         doc.rect(50, descriptionTop, tableWidth, 30)
@@ -437,7 +485,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
              height: 40
            });
         
-        // Sub Levels Section
         const subLevelsTop = descriptionTop + 100;
         
         doc.rect(50, subLevelsTop, tableWidth, 30)
@@ -460,7 +507,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
               const item = subLevels[i];
               if (!item) continue;
               
-              // Check if we need a new page
               if (doc.y > doc.page.height - 100) {
                 doc.addPage();
                 addHeaderToPage();
@@ -470,7 +516,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
               const bulletX = 60 + indent;
               const bulletY = doc.y + 4;
               
-              // Draw bullet
               if (level === 0) {
                 doc.circle(bulletX, bulletY, 3)
                    .fill(COLORS.bulletPrimary);
@@ -481,7 +526,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
               
               const textX = bulletX + 10;
               
-              // Level name
               doc.fontSize(level === 0 ? 11 : 10)
                  .font(level === 0 ? FONTS.subheading : FONTS.normal)
                  .fillColor(COLORS.text);
@@ -491,7 +535,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                 continued: item.description ? true : false
               });
               
-              // Description if available
               if (item.description) {
                 doc.font(FONTS.italic)
                    .fillColor(COLORS.subText)
@@ -501,7 +544,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                 doc.moveDown(0.5);
               }
               
-              // Process nested sublevels if they exist
               if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
                 processSubLevels(item.subLevels, level + 1, maxDepth);
               }
@@ -518,7 +560,6 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         }
       }
       
-      // Add page numbers
       const pageCount = doc.bufferedPageRange().count;
       for (let i = 0; i < pageCount; i++) {
         doc.switchToPage(i);
@@ -833,7 +874,6 @@ export const reorderSubLevels = catchAsync(async (req: Request, res: Response) =
   res.send(updatedInspection);
 });
 
-// New method to update questionnaire for an inspection level
 export const updateInspectionQuestionnaire = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { responses, notes, completed } = req.body;
@@ -869,7 +909,6 @@ export const updateInspectionQuestionnaire = catchAsync(async (req: Request, res
   });
 });
 
-// New method to get questionnaire for an inspection level
 export const getInspectionQuestionnaire = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   
@@ -891,7 +930,6 @@ export const getInspectionQuestionnaire = catchAsync(async (req: Request, res: R
   });
 });
 
-// New method to add or update questions for an inspection level
 export const updateInspectionQuestions = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { questions } = req.body;
@@ -902,7 +940,23 @@ export const updateInspectionQuestions = catchAsync(async (req: Request, res: Re
     throw new ApiError('Inspection level not found', httpStatus.NOT_FOUND);
   }
   
-  inspection.questions = questions;
+  if (questions && Array.isArray(questions)) {
+    const processedQuestions = questions.map((question: any) => {
+      if (question.levelId) {
+        try {
+          question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+            : undefined;
+        } catch (err) {
+          question.levelId = undefined;
+        }
+      }
+      return question;
+    });
+    
+    inspection.questions = processedQuestions;
+  }
+  
   await inspection.save();
   
   res.status(httpStatus.OK).send({
@@ -911,5 +965,27 @@ export const updateInspectionQuestions = catchAsync(async (req: Request, res: Re
       id: inspection._id,
       questions: inspection.questions
     }
+  });
+});
+
+export const getQuestionsByLevel = catchAsync(async (req: Request, res: Response) => {
+  const { id, levelId } = req.params;
+  
+  if (!id || !levelId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Inspection ID and Level ID are required');
+  }
+  
+  const inspection = await InspectionLevel.findById(id);
+  
+  if (!inspection) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
+  }
+  
+  const questions = inspection.questions.filter((q: any) => 
+    q.levelId && q.levelId.toString() === levelId
+  );
+  
+  res.status(httpStatus.OK).send({
+    data: questions
   });
 });

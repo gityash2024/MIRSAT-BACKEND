@@ -10,7 +10,7 @@ import DasboardRoutes from './dashboard.routes';
 import ReportsRoutes from './reports.routes';
 import questionLibraryRoutes from './questionLibrary.routes';
 import assetRoutes from './asset.routes';
-
+import assetTypeRoutes from './assetType.routes';
 const router = Router();
 
 router.use('/auth', authRoutes);
@@ -24,5 +24,6 @@ router.use('/dashboard', DasboardRoutes);
 router.use('/reports', ReportsRoutes);
 router.use('/question-library', questionLibraryRoutes);
 router.use('/assets', assetRoutes);
+router.use('/asset-types', assetTypeRoutes);
 
 export default router;
