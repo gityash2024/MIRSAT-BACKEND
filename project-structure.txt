@@ -1,194 +1,194 @@
-.
-├── dist
-│   ├── app.js
-│   ├── app.js.map
-│   ├── config
-│   │   ├── cloudinary.js
-│   │   ├── cloudinary.js.map
-│   │   ├── database.js
-│   │   ├── database.js.map
-│   │   ├── logger.js
-│   │   ├── logger.js.map
-│   │   ├── multer.js
-│   │   ├── multer.js.map
-│   │   ├── swagger.js
-│   │   └── swagger.js.map
-│   ├── controllers
-│   │   ├── auth.controller.js
-│   │   ├── auth.controller.js.map
-│   │   ├── inspection.controller.js
-│   │   ├── inspection.controller.js.map
-│   │   ├── notification.controller.js
-│   │   ├── notification.controller.js.map
-│   │   ├── role.controller.js
-│   │   ├── role.controller.js.map
-│   │   ├── task.controller.js
-│   │   ├── task.controller.js.map
-│   │   ├── user.controller.js
-│   │   └── user.controller.js.map
-│   ├── interfaces
-│   │   ├── auth.interface.js
-│   │   ├── auth.interface.js.map
-│   │   ├── error.interface.js
-│   │   └── error.interface.js.map
-│   ├── middleware
-│   │   ├── auth.middleware.js
-│   │   ├── auth.middleware.js.map
-│   │   ├── error.middleware.js
-│   │   ├── error.middleware.js.map
-│   │   ├── validate.middleware.js
-│   │   └── validate.middleware.js.map
-│   ├── models
-│   │   ├── InspectionLevel.js
-│   │   ├── InspectionLevel.js.map
-│   │   ├── Notification.js
-│   │   ├── Notification.js.map
-│   │   ├── Role.js
-│   │   ├── Role.js.map
-│   │   ├── Task.js
-│   │   ├── Task.js.map
-│   │   ├── User.js
-│   │   └── User.js.map
-│   ├── public
-│   │   └── index.html
-│   ├── routes
-│   │   ├── auth.routes.js
-│   │   ├── auth.routes.js.map
-│   │   ├── index.js
-│   │   ├── index.js.map
-│   │   ├── inspection.routes.js
-│   │   ├── inspection.routes.js.map
-│   │   ├── notification.routes.js
-│   │   ├── notification.routes.js.map
-│   │   ├── role.routes.js
-│   │   ├── role.routes.js.map
-│   │   ├── task.routes.js
-│   │   ├── task.routes.js.map
-│   │   ├── user.routes.js
-│   │   └── user.routes.js.map
-│   ├── seeders
-│   │   ├── adminSeeder.js
-│   │   └── adminSeeder.js.map
-│   ├── server.js
-│   ├── server.js.map
-│   ├── services
-│   │   ├── email.service.js
-│   │   ├── email.service.js.map
-│   │   ├── notification.service.js
-│   │   ├── notification.service.js.map
-│   │   ├── socket.service.js
-│   │   ├── socket.service.js.map
-│   │   ├── upload.service.js
-│   │   └── upload.service.js.map
-│   ├── utils
-│   │   ├── ApiError.js
-│   │   ├── ApiError.js.map
-│   │   ├── catchAsync.js
-│   │   ├── catchAsync.js.map
-│   │   ├── constants.js
-│   │   ├── constants.js.map
-│   │   ├── logger.js
-│   │   ├── logger.js.map
-│   │   ├── permissions.js
-│   │   └── permissions.js.map
-│   └── validations
-│       ├── auth.validation.js
-│       ├── auth.validation.js.map
-│       ├── custom.validation.js
-│       ├── custom.validation.js.map
-│       ├── inspection.validation.js
-│       ├── inspection.validation.js.map
-│       ├── role.validation.js
-│       ├── role.validation.js.map
-│       ├── task.validation.js
-│       ├── task.validation.js.map
-│       ├── user.validation.js
-│       └── user.validation.js.map
-├── logs
-│   ├── combined.log
-│   └── error.log
-├── nodemon.json
-├── package.json
-├── package-lock.json
-├── pdfkit.d.ts
-├── postman.json
-├── project-structure.txt
-├── public
-│   └── index.html
-├── README.md
-├── src
-│   ├── app.ts
-│   ├── config
-│   │   ├── cloudinary.ts
-│   │   ├── database.ts
-│   │   ├── logger.ts
-│   │   ├── multer.ts
-│   │   └── swagger.ts
-│   ├── controllers
-│   │   ├── asset.controller.ts
-│   │   ├── auth.controller.ts
-│   │   ├── dashboard.controller.ts
-│   │   ├── inspection.controller.ts
-│   │   ├── notification.controller.ts
-│   │   ├── questionLibrary.controller.ts
-│   │   ├── reports.controller.ts
-│   │   ├── role.controller.ts
-│   │   ├── task.controller.ts
-│   │   ├── user.controller.ts
-│   │   └── UserTaskController.ts
-│   ├── interfaces
-│   │   ├── auth.interface.ts
-│   │   └── error.interface.ts
-│   ├── middleware
-│   │   ├── auth.middleware.ts
-│   │   ├── error.middleware.ts
-│   │   └── validate.middleware.ts
-│   ├── models
-│   │   ├── Asset.ts
-│   │   ├── InspectionLevel.ts
-│   │   ├── Notification.ts
-│   │   ├── QuestionLibrary.ts
-│   │   ├── Role.ts
-│   │   ├── Task.ts
-│   │   └── User.ts
-│   ├── routes
-│   │   ├── asset.routes.ts
-│   │   ├── auth.routes.ts
-│   │   ├── dashboard.routes.ts
-│   │   ├── index.ts
-│   │   ├── inspection.routes.ts
-│   │   ├── notification.routes.ts
-│   │   ├── questionLibrary.routes.ts
-│   │   ├── reports.routes.ts
-│   │   ├── role.routes.ts
-│   │   ├── task.routes.ts
-│   │   ├── user.routes.ts
-│   │   └── userTask.routes.ts
-│   ├── seeders
-│   │   └── adminSeeder.ts
-│   ├── server.ts
-│   ├── services
-│   │   ├── email.service.ts
-│   │   ├── notification.service.ts
-│   │   ├── socket.service.ts
-│   │   └── upload.service.ts
-│   ├── types
-│   │   └── express
-│   ├── utils
-│   │   ├── ApiError.ts
-│   │   ├── catchAsync.ts
-│   │   ├── constants.ts
-│   │   ├── logger.ts
-│   │   └── permissions.ts
-│   └── validations
-│       ├── asset.validation.ts
-│       ├── auth.validation.ts
-│       ├── custom.validation.ts
-│       ├── inspection.validation.ts
-│       ├── questionLibrary.validation.ts
-│       ├── role.validation.ts
-│       ├── task.validation.ts
-│       └── user.validation.ts
-└── tsconfig.json
+    .
+    ├── dist
+    │   ├── app.js
+    │   ├── app.js.map
+    │   ├── config
+    │   │   ├── cloudinary.js
+    │   │   ├── cloudinary.js.map
+    │   │   ├── database.js
+    │   │   ├── database.js.map
+    │   │   ├── logger.js
+    │   │   ├── logger.js.map
+    │   │   ├── multer.js
+    │   │   ├── multer.js.map
+    │   │   ├── swagger.js
+    │   │   └── swagger.js.map
+    │   ├── controllers
+    │   │   ├── auth.controller.js
+    │   │   ├── auth.controller.js.map
+    │   │   ├── inspection.controller.js
+    │   │   ├── inspection.controller.js.map
+    │   │   ├── notification.controller.js
+    │   │   ├── notification.controller.js.map
+    │   │   ├── role.controller.js
+    │   │   ├── role.controller.js.map
+    │   │   ├── task.controller.js
+    │   │   ├── task.controller.js.map
+    │   │   ├── user.controller.js
+    │   │   └── user.controller.js.map
+    │   ├── interfaces
+    │   │   ├── auth.interface.js
+    │   │   ├── auth.interface.js.map
+    │   │   ├── error.interface.js
+    │   │   └── error.interface.js.map
+    │   ├── middleware
+    │   │   ├── auth.middleware.js
+    │   │   ├── auth.middleware.js.map
+    │   │   ├── error.middleware.js
+    │   │   ├── error.middleware.js.map
+    │   │   ├── validate.middleware.js
+    │   │   └── validate.middleware.js.map
+    │   ├── models
+    │   │   ├── InspectionLevel.js
+    │   │   ├── InspectionLevel.js.map
+    │   │   ├── Notification.js
+    │   │   ├── Notification.js.map
+    │   │   ├── Role.js
+    │   │   ├── Role.js.map
+    │   │   ├── Task.js
+    │   │   ├── Task.js.map
+    │   │   ├── User.js
+    │   │   └── User.js.map
+    │   ├── public
+    │   │   └── index.html
+    │   ├── routes
+    │   │   ├── auth.routes.js
+    │   │   ├── auth.routes.js.map
+    │   │   ├── index.js
+    │   │   ├── index.js.map
+    │   │   ├── inspection.routes.js
+    │   │   ├── inspection.routes.js.map
+    │   │   ├── notification.routes.js
+    │   │   ├── notification.routes.js.map
+    │   │   ├── role.routes.js
+    │   │   ├── role.routes.js.map
+    │   │   ├── task.routes.js
+    │   │   ├── task.routes.js.map
+    │   │   ├── user.routes.js
+    │   │   └── user.routes.js.map
+    │   ├── seeders
+    │   │   ├── adminSeeder.js
+    │   │   └── adminSeeder.js.map
+    │   ├── server.js
+    │   ├── server.js.map
+    │   ├── services
+    │   │   ├── email.service.js
+    │   │   ├── email.service.js.map
+    │   │   ├── notification.service.js
+    │   │   ├── notification.service.js.map
+    │   │   ├── socket.service.js
+    │   │   ├── socket.service.js.map
+    │   │   ├── upload.service.js
+    │   │   └── upload.service.js.map
+    │   ├── utils
+    │   │   ├── ApiError.js
+    │   │   ├── ApiError.js.map
+    │   │   ├── catchAsync.js
+    │   │   ├── catchAsync.js.map
+    │   │   ├── constants.js
+    │   │   ├── constants.js.map
+    │   │   ├── logger.js
+    │   │   ├── logger.js.map
+    │   │   ├── permissions.js
+    │   │   └── permissions.js.map
+    │   └── validations
+    │       ├── auth.validation.js
+    │       ├── auth.validation.js.map
+    │       ├── custom.validation.js
+    │       ├── custom.validation.js.map
+    │       ├── inspection.validation.js
+    │       ├── inspection.validation.js.map
+    │       ├── role.validation.js
+    │       ├── role.validation.js.map
+    │       ├── task.validation.js
+    │       ├── task.validation.js.map
+    │       ├── user.validation.js
+    │       └── user.validation.js.map
+    ├── logs
+    │   ├── combined.log
+    │   └── error.log
+    ├── nodemon.json
+    ├── package.json
+    ├── package-lock.json
+    ├── pdfkit.d.ts
+    ├── postman.json
+    ├── project-structure.txt
+    ├── public
+    │   └── index.html
+    ├── README.md
+    ├── src
+    │   ├── app.ts
+    │   ├── config
+    │   │   ├── cloudinary.ts
+    │   │   ├── database.ts
+    │   │   ├── logger.ts
+    │   │   ├── multer.ts
+    │   │   └── swagger.ts
+    │   ├── controllers
+    │   │   ├── asset.controller.ts
+    │   │   ├── auth.controller.ts
+    │   │   ├── dashboard.controller.ts
+    │   │   ├── inspection.controller.ts
+    │   │   ├── notification.controller.ts
+    │   │   ├── questionLibrary.controller.ts
+    │   │   ├── reports.controller.ts
+    │   │   ├── role.controller.ts
+    │   │   ├── task.controller.ts
+    │   │   ├── user.controller.ts
+    │   │   └── UserTaskController.ts
+    │   ├── interfaces
+    │   │   ├── auth.interface.ts
+    │   │   └── error.interface.ts
+    │   ├── middleware
+    │   │   ├── auth.middleware.ts
+    │   │   ├── error.middleware.ts
+    │   │   └── validate.middleware.ts
+    │   ├── models
+    │   │   ├── Asset.ts
+    │   │   ├── InspectionLevel.ts
+    │   │   ├── Notification.ts
+    │   │   ├── QuestionLibrary.ts
+    │   │   ├── Role.ts
+    │   │   ├── Task.ts
+    │   │   └── User.ts
+    │   ├── routes
+    │   │   ├── asset.routes.ts
+    │   │   ├── auth.routes.ts
+    │   │   ├── dashboard.routes.ts
+    │   │   ├── index.ts
+    │   │   ├── inspection.routes.ts
+    │   │   ├── notification.routes.ts
+    │   │   ├── questionLibrary.routes.ts
+    │   │   ├── reports.routes.ts
+    │   │   ├── role.routes.ts
+    │   │   ├── task.routes.ts
+    │   │   ├── user.routes.ts
+    │   │   └── userTask.routes.ts
+    │   ├── seeders
+    │   │   └── adminSeeder.ts
+    │   ├── server.ts
+    │   ├── services
+    │   │   ├── email.service.ts
+    │   │   ├── notification.service.ts
+    │   │   ├── socket.service.ts
+    │   │   └── upload.service.ts
+    │   ├── types
+    │   │   └── express
+    │   ├── utils
+    │   │   ├── ApiError.ts
+    │   │   ├── catchAsync.ts
+    │   │   ├── constants.ts
+    │   │   ├── logger.ts
+    │   │   └── permissions.ts
+    │   └── validations
+    │       ├── asset.validation.ts
+    │       ├── auth.validation.ts
+    │       ├── custom.validation.ts
+    │       ├── inspection.validation.ts
+    │       ├── questionLibrary.validation.ts
+    │       ├── role.validation.ts
+    │       ├── task.validation.ts
+    │       └── user.validation.ts
+    └── tsconfig.json
 
-27 directories, 164 files
+    27 directories, 164 files

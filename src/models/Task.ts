@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ITaskProgress {
   subLevelId: mongoose.Types.ObjectId;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'full_compliance' | 'partial_compliance' | 'non_compliance' | 'not_applicable';
   startedAt?: Date;
   completedAt?: Date;
   completedBy?: Schema.Types.ObjectId;
@@ -69,7 +69,7 @@ const taskProgressSchema = new Schema<ITaskProgress>({
   subLevelId: { type: Schema.Types.ObjectId, ref: 'InspectionLevel.subLevels' },
   status: { 
     type: String, 
-    enum: ['pending', 'in_progress', 'completed'],
+    enum: ['pending', 'in_progress', 'completed', 'full_compliance', 'partial_compliance', 'non_compliance', 'not_applicable'],
     default: 'pending'
   },
   startedAt: { type: Date },
