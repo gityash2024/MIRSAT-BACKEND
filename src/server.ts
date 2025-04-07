@@ -4,6 +4,8 @@ import connectDB from './config/database';
 import { logger } from './utils/logger';
 import { createServer } from 'http';
 import { socketService } from './services/socket.service';
+import { reminderService } from './services/reminder.service';
+
 const httpServer = createServer(app);
 socketService.initialize(httpServer);
 
@@ -13,6 +15,10 @@ const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
   httpServer.listen(PORT, () => {
     logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    
+    // Initialize reminder service jobs
+    reminderService.initJobs();
+    logger.info('Scheduled jobs initialized');
   });
 })
   .catch((error) => {

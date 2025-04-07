@@ -551,7 +551,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
       // Finalize and end the document
       doc.end();
       
-      return;
+      return undefined;
     } catch (err) {
       console.error('PDF generation error:', err);
       if (!res.headersSent) {
@@ -560,7 +560,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
           message: 'Error generating PDF report'
         });
       }
-      return;
+      return undefined;
     }
   } else if (format === 'excel') {
     try {
@@ -573,7 +573,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
       const buffer = await workbook.xlsx.writeBuffer();
       res.send(buffer);
       
-      return;
+      return undefined;
     } catch (err) {
       console.error('Excel generation error:', err);
       return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
@@ -585,7 +585,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
     throw new ApiError(httpStatus.BAD_REQUEST, 'Unsupported format');
   }
   
-  return;
+  return undefined;
 });
 
 async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promise<void> {
@@ -1516,9 +1516,6 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
        );
   }
 }
-
-
-
 
 async function generateTaskExcelContent(workbook: ExcelJS.Workbook, task: any): Promise<void> {
   // Create evaluation sheet

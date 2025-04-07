@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '../models/Role';
-import {ApiError} from '../utils/ApiError';
+import { User } from '../models/User';
+import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
+import { notificationService } from '../services/notification.service';
+import mongoose from 'mongoose';
 
 export const createRole = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { name, description, permissions } = req.body;
@@ -74,6 +77,23 @@ export const updateRole = catchAsync(async (req: Request, res: Response, next: N
   role.isActive = isActive !== undefined ? isActive : role.isActive;
 
   const updatedRole = await role.save();
+
+  // Notify affected users about role changes
+  if (role.name) {
+    // Find users with this role and get their IDs
+    const usersWithRole = await User.find({ role: role.name }).select('_id');
+    
+    // Send notifications to affected users
+    for (const user of usersWithRole) {
+      await notificationService.create({
+        recipient: user._id,
+        type: 'ROLE_UPDATED',
+        title: 'Role Permissions Updated',
+        message: `Your role "${role.name}" has been updated with new permissions`,
+        data: { roleId: role._id, roleName: role.name }
+      });
+    }
+  }
 
   res.status(200).json({
     success: true,

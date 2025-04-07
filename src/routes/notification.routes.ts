@@ -5,6 +5,7 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  createTestNotification
 } from '../controllers/notification.controller';
 
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/', getNotifications);
 router.put('/:id/read', markAsRead);
 router.put('/read-all', markAllAsRead);
 router.delete('/:id', deleteNotification);
+router.post('/test', createTestNotification);
 
 export default router;

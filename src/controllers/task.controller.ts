@@ -4,7 +4,9 @@ import { User } from '../models/User';
 import { ApiError } from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
+import { notificationService } from '../services/notification.service';
 import InspectionLevel from '../../src/models/InspectionLevel';
+
 export const deleteTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const task = await Task.findById(req.params.id);
 
@@ -19,6 +21,7 @@ export const deleteTask = catchAsync(async (req: Request, res: Response, next: N
     message: 'Task deleted successfully'
   });
 });
+
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel, asset } = req.body;
 
@@ -82,12 +85,28 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
     .populate('createdBy', 'name email')
     .populate('asset', 'uniqueId type displayName');  // Populate the asset field
 
+  // Send notifications to all assigned users
+  for (const user of users) {
+    await notificationService.create({
+      recipient: user._id,
+      type: 'TASK_ASSIGNED',
+      title: 'New Task Assigned',
+      message: `You have been assigned to the task: ${title}`,
+      data: {
+        taskId: newTask._id,
+        priority: priority,
+        link: `/tasks/${newTask._id}`
+      }
+    });
+  }
+
   res.status(201).json({
     success: true,
     message: 'Task created successfully',
     data: populatedTask
   });
 });
+
 export const getTasks = catchAsync(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -179,37 +198,87 @@ export const updateTask = catchAsync(async (req: Request, res: Response, next: N
   } = req.body;
 
   const task = await Task.findById(req.params.id);
+
   if (!task) {
     return next(new ApiError('Task not found', 404));
   }
 
-  // Update the task with new data
-  if (title) task.title = title;
-  if (description) task.description = description;
-  if (priority) task.priority = priority;
-  if (deadline) task.deadline = new Date(deadline);
-  if (location) task.location = location;
-  if (asset) task.asset = asset;
+  // Check if assignedTo is being updated
+  if (assignedTo && JSON.stringify(task.assignedTo) !== JSON.stringify(assignedTo)) {
+    // Get new users
+    const newUsers = assignedTo.filter((userId: any) => 
+      !task.assignedTo.includes(userId)
+    );
 
-  if (assignedTo) {
-    const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
-    if (users.length !== assignedTo.length) {
-      return next(new ApiError('One or more assigned users are invalid or inactive', 400));
+    // Send notifications to newly assigned users
+    for (const userId of newUsers) {
+      await notificationService.create({
+        recipient: userId,
+        type: 'TASK_ASSIGNED',
+        title: 'New Task Assignment',
+        message: `You have been assigned to the task: ${task.title}`,
+        data: {
+          taskId: task._id,
+          priority: priority || task.priority,
+          link: `/tasks/${task._id}`
+        }
+      });
     }
-    
-    task.assignedTo = assignedTo as any;
   }
 
-  await task.save();
+  // Check if status is being updated
+  if (status && status !== task.status) {
+    // Notify all assigned users about status change
+    for (const userId of task.assignedTo) {
+      await notificationService.create({
+        recipient: userId,
+        type: 'TASK_STATUS_UPDATE',
+        title: 'Task Status Updated',
+        message: `Task "${task.title}" status has been updated to ${status}`,
+        data: {
+          taskId: task._id,
+          oldStatus: task.status,
+          newStatus: status,
+          link: `/tasks/${task._id}`
+        }
+      });
+    }
+  }
 
-  const updatedTask = await Task.findById(req.params.id)
-    .populate('assignedTo', 'name email department')
-    .populate('createdBy', 'name email')
-    .populate('asset', 'uniqueId type displayName');  // Populate the asset field
+  // Update task
+  const updatedTask = await Task.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        title,
+        description,
+        assignedTo,
+        priority,
+        deadline,
+        location,
+        status,
+        asset
+      },
+      $push: {
+        statusHistory: {
+          status: status || task.status,
+          changedBy: req.user._id,
+          comment: req.body.comment || 'Status updated',
+          timestamp: new Date()
+        }
+      }
+    },
+    { new: true }
+  )
+  .populate('assignedTo', 'name email department')
+  .populate('createdBy', 'name email')
+  .populate('inspectionLevel', 'name type priority subLevels')
+  .populate('asset', 'uniqueId type displayName')
+  .populate('progress.completedBy', 'name email')
+  .populate('progress.signoff.signedBy', 'name email');
 
   res.status(200).json({
     success: true,
-    message: 'Task updated successfully',
     data: updatedTask
   });
 });

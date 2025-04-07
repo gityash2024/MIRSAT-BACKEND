@@ -4,9 +4,10 @@ import { emailService } from './email.service';
 import { logger } from '../utils/logger';
 import { socketService } from './socket.service';
 import { SOCKET_EVENTS } from '../utils/constants';
+import mongoose from 'mongoose';
 
 interface INotificationData {
-  recipient: string;
+  recipient: any;
   type: string;
   title: string;
   message: string;
@@ -14,17 +15,38 @@ interface INotificationData {
 }
 
 class NotificationService {
+  /**
+   * Helper method to safely convert any type of ID to string
+   */
+  private ensureStringId(id: any): string {
+    if (!id) return '';
+    
+    if (typeof id === 'string') return id;
+    if (id instanceof mongoose.Types.ObjectId) return id.toString();
+    if (id._id) return this.ensureStringId(id._id);
+    
+    // Last resort, try String() conversion
+    return String(id);
+  }
 
   async create(notificationData: INotificationData) {
     try {
-      const notification = await Notification.create(notificationData);
+      // Ensure recipient is a valid string ID
+      const recipientId = this.ensureStringId(notificationData.recipient);
+      
+      const notification = await Notification.create({
+        ...notificationData,
+        recipient: recipientId
+      });
+      
       socketService.sendToUser(
-        notificationData.recipient,
+        recipientId,
         SOCKET_EVENTS.NOTIFICATION.NEW,
         notification
       );
+      
       // Get recipient's email
-      const user = await User.findById(notificationData.recipient);
+      const user = await User.findById(recipientId);
       
       if (user && user.email) {
         // Send email notification

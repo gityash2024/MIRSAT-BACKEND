@@ -32,7 +32,7 @@ export const createUser = catchAsync(async (req: Request, res: Response, next: N
   });
 
   // Send welcome email
-  // await emailService.sendWelcomeEmail(email, name);
+  await emailService.sendWelcomeEmail(email, name);
 
   res.status(201).json({
     success: true,
@@ -52,6 +52,7 @@ export const getUsers = catchAsync(async (req: Request, res: Response) => {
     data: users,
   });
 });
+
 
 export const getUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const user = await User.findById(req.params.id)
