@@ -656,21 +656,22 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     return x + rectWidth + 10;
   };
 
-  // Calculate overall score
-  const calculateOverallScore = (): { score: number, total: number, percentage: number } => {
-    if (!task) return { score: 0, total: 0, percentage: 0 };
+  const calculateOverallScore = (): { achieved: number, total: number, percentage: number } => {
+    if (!task) return { achieved: 0, total: 0, percentage: 0 };
     
     let totalPoints = 0;
     let earnedPoints = 0;
     
-    // Calculate points from questionnaire responses
     if (task.questionnaireResponses) {
       const responses = task.questionnaireResponses;
       
       Object.entries(responses).forEach(([key, value]) => {
         if (!key.includes('-') || key.startsWith('c-')) return;
         
-        totalPoints += 2; // Each question is worth 2 points max
+        const questionId = key.split('-')[1];
+        if (!questionId) return;
+        
+        totalPoints += 2;
         
         switch(value) {
           case 'full_compliance':
@@ -682,22 +683,20 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
             break;
           case 'not_applicable':
           case 'na':
-            totalPoints -= 2; // Don't count NA questions
+            totalPoints -= 2;
             break;
         }
       });
     }
     
-    // Calculate points from inspection progress
     if (task.progress) {
-      task.progress.forEach((item: any) => {
+      task.progress.forEach((item) => {
         if (!item || !item.subLevelId) return;
         
-        // Find the sublevel to check if it's mandatory
-        const isMandatory = true; // Default to mandatory if we can't determine
+        const isMandatory = true;
         
         if (isMandatory) {
-          totalPoints += 2; // Each mandatory item is worth 2 points
+          totalPoints += 2;
           
           switch (item.status) {
             case 'completed':
@@ -709,17 +708,16 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
               earnedPoints += 1;
               break;
             case 'not_applicable':
-              totalPoints -= 2; // Don't count NA items
+              totalPoints -= 2;
               break;
           }
         }
       });
     }
     
-    // If no points calculated but we have overall progress, use that
     if (totalPoints === 0 && task.overallProgress !== undefined) {
       return {
-        score: task.overallProgress,
+        achieved: task.overallProgress,
         total: 100,
         percentage: task.overallProgress
       };
@@ -728,7 +726,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     const percentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
     
     return {
-      score: earnedPoints,
+      achieved: earnedPoints,
       total: totalPoints,
       percentage
     };
@@ -773,15 +771,14 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     yPos += 80;
   }
   
-  // Display Score
-  const score : any= calculateOverallScore();
-  doc.rect(50, yPos, 495, 40)
-     .fillAndStroke('#f8f9fa', '#dee2e6');
-  
-  doc.fillColor(colors.primary)
-     .fontSize(14)
-     .font('Helvetica-Bold')
-     .text(`Score ${score.achieved} / ${score.total} (${score.percentage}%)`, 70, yPos + 12);
+const score : any= calculateOverallScore();
+doc.rect(50, yPos, 495, 40)
+   .fillAndStroke('#f8f9fa', '#dee2e6');
+
+   doc.fillColor(colors.primary)
+   .fontSize(14)
+   .font('Helvetica-Bold')
+   .text(`Score ${score.achieved} / ${score.total} (${score.percentage}%)`, 70, yPos + 12);
   
   doc.fillColor(colors.text)
      .fontSize(10)
