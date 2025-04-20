@@ -8,15 +8,37 @@ export interface ISubLevel {
   completedAt?: Date;
   completedBy?: Schema.Types.ObjectId;
   subLevels?: ISubLevel[];
+  questions?: IQuestion[];
+}
+
+export interface IQuestion {
+  id?: string;
+  _id?: string;
+  text: string;
+  answerType: string;
+  options?: string[];
+  required: boolean;
+  levelId?: Schema.Types.ObjectId | string;
+}
+
+export interface IInspectionSet {
+  id?: string;
+  _id?: string;
+  name: string;
+  description: string;
+  subLevels: ISubLevel[];
+  questions: IQuestion[];
+  generalQuestions: IQuestion[];
 }
 
 export interface IInspectionLevel extends Document {
   name: string;
   description: string;
-  type: 'safety' | 'environmental' | 'operational' | 'quality';
+  type: 'safety' | 'environmental' | 'operational' | 'quality' | 'yacht_chartering' | 'marina_operator' | 'tourism_agent';
   status: 'active' | 'inactive' | 'draft' | 'archived';
   priority: 'high' | 'medium' | 'low';
   subLevels: ISubLevel[];
+  sets?: IInspectionSet[];
   createdBy: Schema.Types.ObjectId;
   updatedBy: Schema.Types.ObjectId;
   completionCriteria: {
@@ -55,15 +77,7 @@ export interface IInspectionLevel extends Document {
     }[];
     timestamp: Date;
   }[];
-  questions: {
-    id?: string;
-    _id?: string;
-    text: string;
-    answerType: string;
-    options?: string[];
-    required: boolean;
-    levelId?: Schema.Types.ObjectId | string;
-  }[];
+  questions: IQuestion[];
   questionnaireResponses?: Record<string, any>;
   questionnaireCompleted?: boolean;
   questionnaireNotes?: string;
@@ -82,7 +96,13 @@ const subLevelSchema = new Schema({
 });
 
 subLevelSchema.add({
-  subLevels: [subLevelSchema]
+  subLevels: [subLevelSchema],
+  questions: [{ 
+    text: String,
+    answerType: String,
+    options: [String],
+    required: Boolean
+  }]
 });
 
 subLevelSchema.set('toJSON', { virtuals: true });
@@ -98,6 +118,18 @@ const questionSchema = new Schema({
     ref: 'InspectionLevel',
     default: null
   }
+});
+
+// Create schema for inspection sets
+const inspectionSetSchema = new Schema({
+  name: { type: String, required: true },
+  description: { type: String },
+  subLevels: [subLevelSchema],
+  questions: [questionSchema],
+  generalQuestions: [questionSchema]
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 const inspectionLevelSchema = new Schema<IInspectionLevel>({
@@ -121,6 +153,7 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
     default: 'medium'
   },
   subLevels: [subLevelSchema],
+  sets: [inspectionSetSchema],
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   completionCriteria: {

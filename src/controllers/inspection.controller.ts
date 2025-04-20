@@ -63,6 +63,48 @@ export const createInspectionLevel = catchAsync(async (req: Request, res: Respon
     inspectionData.subLevels = processSubLevels(inspectionData.subLevels);
   }
   
+  if (inspectionData.sets && Array.isArray(inspectionData.sets)) {
+    inspectionData.sets = inspectionData.sets.map((set: any) => {
+      const processedSet = { ...set };
+      
+      if (set.subLevels && Array.isArray(set.subLevels)) {
+        processedSet.subLevels = processSubLevels(set.subLevels);
+      }
+      
+      if (set.questions && Array.isArray(set.questions)) {
+        processedSet.questions = set.questions.map((question: any) => {
+          if (question.levelId) {
+            try {
+              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+                : undefined;
+            } catch (err) {
+              question.levelId = undefined;
+            }
+          }
+          return question;
+        });
+      }
+      
+      if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
+        processedSet.generalQuestions = set.generalQuestions.map((question: any) => {
+          if (question.levelId) {
+            try {
+              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+                : undefined;
+            } catch (err) {
+              question.levelId = undefined;
+            }
+          }
+          return question;
+        });
+      }
+      
+      return processedSet;
+    });
+  }
+  
   if (inspectionData.questions && Array.isArray(inspectionData.questions)) {
     inspectionData.questions = inspectionData.questions.map((question: any) => {
       if (question.levelId) {
@@ -154,6 +196,13 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
         levelObj.subLevels = processLevels(levelObj.subLevels);
       }
       
+      if (levelObj.questions && Array.isArray(levelObj.questions)) {
+        levelObj.questions = levelObj.questions.map((q: any) => ({
+          ...q,
+          id: q._id || q.id
+        }));
+      }
+      
       return {
         ...levelObj,
         id: levelObj._id
@@ -162,10 +211,40 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
   };
   
   const result = inspection.toObject();
+  
   result.subLevels = processLevels(result.subLevels);
   
+  if (result.sets && Array.isArray(result.sets)) {
+    result.sets = result.sets.map((set: any) => {
+      const processedSet = {
+        ...set,
+        id: set._id || set.id
+      };
+      
+      if (set.subLevels && Array.isArray(set.subLevels)) {
+        processedSet.subLevels = processLevels(set.subLevels);
+      }
+      
+      if (set.questions && Array.isArray(set.questions)) {
+        processedSet.questions = set.questions.map((q: any) => ({
+          ...q,
+          id: q._id || q.id
+        }));
+      }
+      
+      if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
+        processedSet.generalQuestions = set.generalQuestions.map((q: any) => ({
+          ...q,
+          id: q._id || q.id
+        }));
+      }
+      
+      return processedSet;
+    });
+  }
+  
   if (result.questions && Array.isArray(result.questions)) {
-    result.questions = result.questions.map(q => ({
+    result.questions = result.questions.map((q: any) => ({
       ...q,
       id: q._id || q.id
     }));
@@ -191,6 +270,48 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
 
   if (updateData.subLevels) {
     updateData.subLevels = processSubLevels(updateData.subLevels);
+  }
+  
+  if (updateData.sets && Array.isArray(updateData.sets)) {
+    updateData.sets = updateData.sets.map((set: any) => {
+      const processedSet = { ...set };
+      
+      if (set.subLevels && Array.isArray(set.subLevels)) {
+        processedSet.subLevels = processSubLevels(set.subLevels);
+      }
+      
+      if (set.questions && Array.isArray(set.questions)) {
+        processedSet.questions = set.questions.map((question: any) => {
+          if (question.levelId) {
+            try {
+              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+                : undefined;
+            } catch (err) {
+              question.levelId = undefined;
+            }
+          }
+          return question;
+        });
+      }
+      
+      if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
+        processedSet.generalQuestions = set.generalQuestions.map((question: any) => {
+          if (question.levelId) {
+            try {
+              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+                : undefined;
+            } catch (err) {
+              question.levelId = undefined;
+            }
+          }
+          return question;
+        });
+      }
+      
+      return processedSet;
+    });
   }
   
   if (updateData.questions && Array.isArray(updateData.questions)) {
@@ -498,7 +619,7 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         doc.y = subLevelsTop + 40;
         
         if (inspection.subLevels && inspection.subLevels.length > 0) {
-          const processSubLevels = (subLevels: any[], level = 0, maxDepth = 10): void => {
+          const processSubLevelsForPDF = (subLevels: any[], level = 0, maxDepth = 10): void => {
             if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0 || level >= maxDepth) {
               return;
             }
@@ -545,12 +666,12 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
               }
               
               if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
-                processSubLevels(item.subLevels, level + 1, maxDepth);
+                processSubLevelsForPDF(item.subLevels, level + 1, maxDepth);
               }
             }
           };
           
-          processSubLevels(inspection.subLevels);
+          processSubLevelsForPDF(inspection.subLevels);
           
         } else {
           doc.fontSize(11)
