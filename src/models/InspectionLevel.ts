@@ -138,7 +138,6 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   type: { 
     type: String, 
     required: true,
-    enum: ['safety', 'environmental', 'operational', 'quality', 'yacht_chartering', 'marina_operator', 'tourism_agent']
   },
   status: {
     type: String,
