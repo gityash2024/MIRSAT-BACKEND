@@ -5,11 +5,13 @@ import { logger } from './utils/logger';
 import { createServer } from 'http';
 import { socketService } from './services/socket.service';
 import { reminderService } from './services/reminder.service';
+// Import models to ensure plugins are applied
+import './models';
 
 const httpServer = createServer(app);
 socketService.initialize(httpServer);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 
 connectDB().then(() => {

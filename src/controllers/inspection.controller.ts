@@ -159,7 +159,8 @@ export const getInspectionLevels = catchAsync(async (req: Request, res: Response
       .populate(options.populate || '')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
-      .populate('assignedTasks', 'title description status'),
+      .populate('assignedTasks', 'title description status')
+      .lean(),
     InspectionLevel.countDocuments(filter)
   ]);
 
@@ -180,7 +181,8 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
   const inspection = await InspectionLevel.findById(req.params.id)
     .populate('createdBy', 'name email')
     .populate('updatedBy', 'name email')
-    .populate('assignedTasks', 'title description status');
+    .populate('assignedTasks', 'title description status')
+    .lean();
     
   if (!inspection) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
@@ -190,7 +192,7 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
     if (!levels) return [];
     
     return levels.map((level: any) => {
-      const levelObj = level.toObject ? level.toObject() : level;
+      const levelObj = level;
       
       if (levelObj.subLevels && levelObj.subLevels.length > 0) {
         levelObj.subLevels = processLevels(levelObj.subLevels);
@@ -210,7 +212,7 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
     });
   };
   
-  const result = inspection.toObject();
+  const result = inspection;
   
   result.subLevels = processLevels(result.subLevels);
   

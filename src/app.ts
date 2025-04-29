@@ -16,6 +16,7 @@ import userRoutes from './routes/user.routes';
 import taskRoutes from './routes/task.routes';
 import assetRoutes from './routes/asset.routes';
 import roleRoutes from './routes/role.routes';
+import questionnaireRoutesV1 from './routes/v1/questionnaire.route';
 
 const app = express();
 if (process.env.NODE_ENV === 'development') {
@@ -24,15 +25,19 @@ if (process.env.NODE_ENV === 'development') {
 logger.info('Initializing application...');
 
 // Middleware
+app.use(compression());
 app.use(helmet());
 app.use(cors({
   origin: ['https://mirsat-frontend.vercel.app', 'http://localhost:5173','http://localhost:5174','https://mirsat.mymultimeds.com'],
   methods: '*',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
+app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
+
+// Increase payload limit to handle large inspection templates
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Rate limiting
@@ -52,6 +57,7 @@ app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/assets', assetRoutes);
 app.use('/api/v1/roles', roleRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/questionnaires', questionnaireRoutesV1);
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

@@ -590,7 +590,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
 
 async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promise<void> {
   const colors = {
-    primary: '#1a237e',
+    primary: 'var(--color-navy)',
     secondary: '#3949ab',
     text: '#333333',
     lightText: '#666666',
@@ -1012,7 +1012,7 @@ doc.rect(50, yPos, 495, 40)
                     break;
                   default:
                     responseText = response;
-                    responseColor = '#1a237e';
+                    responseColor = 'var(--color-navy)';
                 }
                 
                 doc.rect(80 + indent, yPos, 150, 15)
@@ -1160,7 +1160,7 @@ doc.rect(50, yPos, 495, 40)
                 break;
               default:
                 responseText = question.response;
-                responseColor = '#1a237e';
+                responseColor = 'var(--color-navy)';
             }
           }
           
