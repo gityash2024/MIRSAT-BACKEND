@@ -2,7 +2,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 interface CloudinaryStorageParams {
   folder: string;
   allowed_formats: string[];

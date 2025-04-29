@@ -4,7 +4,7 @@ import { User } from '../models/User';
 import { emailService } from '../services/email.service';
 import { catchAsync } from '../utils/catchAsync';
 import jwt from 'jsonwebtoken';
-import {ApiError} from '../utils/ApiError';
+import  ApiError from '../utils/ApiError';
 
 const generateToken = (id: any): string => {
   if (!process.env.JWT_SECRET) {

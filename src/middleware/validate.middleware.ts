@@ -2,7 +2,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 
 export const validate = (schema: any) => (req: Request, res: Response, next: NextFunction) => {
   const validSchema = pick(schema, ['params', 'query', 'body']);

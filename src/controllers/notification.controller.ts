@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { notificationService } from '../services/notification.service';
 import { catchAsync } from '../utils/catchAsync';
 import httpStatus from 'http-status';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 
 export const getNotifications = catchAsync(async (req: Request, res: Response) => {
   const result = await notificationService.getUserNotifications(req.user!._id, req.query);

@@ -1,7 +1,7 @@
 // controllers/assetType.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { AssetType } from '../models/AssetType';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 
 export const createAssetType = catchAsync(async (req: Request, res: Response, next: NextFunction) => {

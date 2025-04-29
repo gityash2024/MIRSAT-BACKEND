@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '../models/Role';
 import { User } from '../models/User';
-import { ApiError } from '../utils/ApiError';
+import  ApiError  from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { notificationService } from '../services/notification.service';
 import mongoose from 'mongoose';

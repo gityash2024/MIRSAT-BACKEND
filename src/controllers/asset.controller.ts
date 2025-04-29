@@ -1,7 +1,7 @@
 // controllers/asset.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { Asset } from '../models/Asset';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import ExcelJS from 'exceljs';
 

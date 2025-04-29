@@ -16,6 +16,7 @@ router
 
 router
   .route('/:id')
+  .put(validate(questionLibraryValidation.updateQuestionSchema), questionLibraryController.updateQuestionInLibrary)
   .delete(questionLibraryController.deleteQuestionFromLibrary);
 
 export default router; 

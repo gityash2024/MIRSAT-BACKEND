@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User';
 import { Role } from '../models/Role';
-import {ApiError} from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { emailService } from '../services/email.service';
 

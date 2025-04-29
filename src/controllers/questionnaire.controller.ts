@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import { catchAsync } from '../utils/catchAsync';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import Questionnaire from '../models/questionnaire.model';
 import { pick } from 'lodash';
 

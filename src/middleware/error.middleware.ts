@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { logger } from '../utils/logger';
 
 interface ExtendedError extends Error {
@@ -61,7 +61,16 @@ export const errorHandler = (
   }
 
   // If it's not an operational error, set status code to 500
-  const statusCode = error instanceof ApiError ? error.statusCode : 500;
+  let statusCode = 500;
+  try {
+    statusCode = error instanceof ApiError && typeof error.statusCode === 'number' 
+      ? error.statusCode 
+      : 500;
+  } catch (instanceofError) {
+    logger.error('Error in instanceof check:', instanceofError);
+    statusCode = 500;
+  }
+  
   const message = error.message || 'Internal Server Error';
 
   // Send more detailed error in development

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
-import { ApiError } from '../utils/ApiError';
+import  ApiError  from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { DEFAULT_ROLE_PERMISSIONS, ROLES } from '../utils/permissions';
 

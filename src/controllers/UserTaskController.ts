@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import { catchAsync } from '../utils/catchAsync';
 import { Task } from '../models/Task';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { pick } from 'lodash';
 import mongoose from 'mongoose';
 import PDFDocument from 'pdfkit';

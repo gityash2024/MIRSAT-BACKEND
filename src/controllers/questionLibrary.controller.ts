@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import { catchAsync } from '../utils/catchAsync';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import QuestionLibrary from '../models/QuestionLibrary';
 import { pick } from 'lodash';
 
@@ -73,4 +73,29 @@ export const deleteQuestionFromLibrary = catchAsync(async (req: Request, res: Re
   await question.deleteOne();
   
   return res.status(httpStatus.NO_CONTENT).send();
+});
+
+export const updateQuestionInLibrary = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const question = await QuestionLibrary.findById(id);
+  
+  if (!question) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Question not found in library');
+  }
+  
+  // Update the question fields
+  Object.assign(question, {
+    text: req.body.text || question.text,
+    answerType: req.body.answerType || question.answerType,
+    options: req.body.options || question.options,
+    required: req.body.required !== undefined ? req.body.required : question.required
+  });
+  
+  await question.save();
+  
+  return res.status(httpStatus.OK).send({
+    message: 'Question updated successfully',
+    data: question
+  });
 }); 

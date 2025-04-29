@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Task } from '../models/Task';
 import { User } from '../models/User';
-import { ApiError } from '../utils/ApiError';
+import ApiError from '../utils/ApiError';
 import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
 import { notificationService } from '../services/notification.service';

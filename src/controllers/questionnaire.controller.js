@@ -1,5 +1,6 @@
 const httpStatus = require('http-status');
 const Questionnaire = require('../models/questionnaire.model');
+const QuestionLibrary = require('../models/QuestionLibrary');
 const mongoose = require('mongoose');
 const ApiError = require('../utils/ApiError');
 
@@ -51,7 +52,7 @@ const getQuestionnaires = async (req, res) => {
     const { title, category, status, search, page = 1, limit = 10, sortBy } = req.query;
     
     console.log('Questionnaires API Request:', { 
-      userId: req.user?.id,
+      userId: req.user?.id || req.user?._id,
       query: req.query,
       path: req.path
     });
@@ -88,43 +89,7 @@ const getQuestionnaires = async (req, res) => {
     
     console.log('Found questionnaires:', questionnaires.length);
     
-    // Create a sample questionnaire if none exist
-    if (totalResults === 0 && questionnaires.length === 0) {
-      console.log('No questionnaires found. Creating a sample one...');
-      try {
-        const sampleQuestionnaire = await Questionnaire.create({
-          title: 'Sample Questionnaire',
-          description: 'This is a sample questionnaire created automatically',
-          category: 'safety',
-          status: 'draft',
-          createdBy: req.user.id || req.user._id,
-          questions: [
-            {
-              text: 'Is safety equipment available?',
-              type: 'yesno',
-              required: true,
-              requirementType: 'mandatory',
-              weight: 1
-            }
-          ]
-        });
-        
-        console.log('Sample questionnaire created:', sampleQuestionnaire._id);
-        
-        const response = {
-          results: [sampleQuestionnaire],
-          page: pageNum,
-          limit: limitNum,
-          totalPages: 1,
-          totalResults: 1,
-        };
-        
-        return res.send(response);
-      } catch (sampleError) {
-        console.error('Failed to create sample questionnaire:', sampleError);
-      }
-    }
-
+    // Return existing questionnaires - don't create sample ones
     const response = {
       results: questionnaires,
       page: pageNum,
@@ -240,11 +205,85 @@ const duplicateQuestionnaire = async (req, res) => {
   }
 };
 
+/**
+ * Helper function to convert question library format to questionnaire format
+ */
+const convertLibraryToQuestionnaireFormat = (libraryQuestion) => {
+  // Map from library format to questionnaire format
+  return {
+    text: libraryQuestion.text,
+    type: mapAnswerTypeToQuestionType(libraryQuestion.answerType),
+    required: libraryQuestion.required || false,
+    requirementType: 'mandatory',
+    weight: 1,
+    options: libraryQuestion.options || [],
+    // Add any additional fields needed
+  };
+};
+
+/**
+ * Helper to map library answer types to questionnaire types
+ */
+const mapAnswerTypeToQuestionType = (answerType) => {
+  const mappings = {
+    'yesno': 'yesno',
+    'text': 'text',
+    'number': 'number',
+    'select': 'dropdown',
+    'multiple_choice': 'radio',
+    'compliance': 'compliance'
+  };
+  return mappings[answerType] || answerType;
+};
+
+/**
+ * Import question library questions into questionnaire
+ */
+const importQuestionsFromLibrary = async (req, res) => {
+  try {
+    // Find all questions from library
+    const libraryQuestions = await QuestionLibrary.find()
+      .populate('createdBy', 'name email')
+      .lean();
+    
+    if (!libraryQuestions || libraryQuestions.length === 0) {
+      return res.status(httpStatus.NOT_FOUND).send({ 
+        message: 'No questions found in library to import' 
+      });
+    }
+    
+    // Convert library questions to questionnaire format
+    const convertedQuestions = libraryQuestions.map(convertLibraryToQuestionnaireFormat);
+    
+    // Create a new questionnaire with these questions
+    const questionnaire = await Questionnaire.create({
+      title: 'Imported from Question Library',
+      description: 'This questionnaire was automatically created from the Question Library',
+      category: 'safety',
+      status: 'draft',
+      createdBy: req.user.id || req.user._id,
+      questions: convertedQuestions
+    });
+    
+    res.status(httpStatus.CREATED).send({
+      message: 'Successfully imported questions from library',
+      data: questionnaire
+    });
+  } catch (error) {
+    console.error('Error importing questions from library:', error);
+    res.status(httpStatus.BAD_REQUEST).send({ 
+      message: error.message,
+      error: error.stack
+    });
+  }
+};
+
 module.exports = {
   createQuestionnaire,
   getQuestionnaires,
   getQuestionnaire,
   updateQuestionnaire,
   deleteQuestionnaire,
-  duplicateQuestionnaire
+  duplicateQuestionnaire,
+  importQuestionsFromLibrary
 }; 

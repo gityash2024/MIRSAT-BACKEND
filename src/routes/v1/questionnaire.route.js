@@ -21,4 +21,9 @@ router
   .route('/:id/duplicate')
   .post(auth('manageQuestionnaires'), validate(questionnaireValidation.duplicateQuestionnaire), questionnaireController.duplicateQuestionnaire);
 
+// Route to import questions from the library
+router
+  .route('/import-from-library')
+  .post(auth('manageQuestionnaires'), questionnaireController.importQuestionsFromLibrary);
+
 module.exports = router; 
