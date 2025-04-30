@@ -1,5 +1,26 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface ISection {
+  name: string;
+  description: string;
+  order: number;
+  isCompleted?: boolean;
+  completedAt?: Date;
+  completedBy?: Schema.Types.ObjectId;
+  questions?: IQuestion[];
+  subLevels?: ISection[];
+}
+
+export interface IPage {
+  name: string;
+  description: string;
+  order: number;
+  isCompleted?: boolean;
+  completedAt?: Date;
+  completedBy?: Schema.Types.ObjectId;
+  sections: ISection[];
+}
+
 export interface ISubLevel {
   name: string;
   description: string;
@@ -19,6 +40,16 @@ export interface IQuestion {
   options?: string[];
   required: boolean;
   levelId?: Schema.Types.ObjectId | string;
+  description?: string;
+  type?: string;
+  scoring?: {
+    enabled: boolean;
+    max: number;
+    weights?: Record<string, number>;
+  };
+  scores?: Record<string, number>;
+  requirementType?: string;
+  mandatory?: boolean;
 }
 
 export interface IInspectionSet {
@@ -37,7 +68,8 @@ export interface IInspectionLevel extends Document {
   type: 'safety' | 'environmental' | 'operational' | 'quality' | 'yacht_chartering' | 'marina_operator' | 'tourism_agent';
   status: 'active' | 'inactive' | 'draft' | 'archived';
   priority: 'high' | 'medium' | 'low';
-  subLevels: ISubLevel[];
+  subLevels?: ISubLevel[];
+  pages?: IPage[];
   sets?: IInspectionSet[];
   createdBy: Schema.Types.ObjectId;
   updatedBy: Schema.Types.ObjectId;
@@ -81,14 +113,63 @@ export interface IInspectionLevel extends Document {
   questionnaireResponses?: Record<string, any>;
   questionnaireCompleted?: boolean;
   questionnaireNotes?: string;
+  requirementType?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Define the question schema first
+const questionSchema = new Schema({
+  text: { type: String, required: true },
+  description: { type: String, default: '' },
+  answerType: String,
+  type: String,
+  options: [String],
+  required: Boolean,
+  levelId: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'InspectionLevel',
+    default: null
+  },
+  scoring: {
+    enabled: Boolean,
+    max: Number,
+    weights: Schema.Types.Mixed
+  },
+  scores: Schema.Types.Mixed,
+  requirementType: String,
+  mandatory: Boolean
+}, { 
+  _id: true,
+  strict: false // Allow additional fields not explicitly defined
+});
+
+// Now define section schema using the question schema
+const sectionSchema = new Schema({
+  name: { type: String, required: true },
+  description: { type: String, default: 'No description provided' },
+  order: { type: Number, required: true },
+  isCompleted: { type: Boolean, default: false },
+  completedAt: { type: Date },
+  completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  questions: [questionSchema],
+  subLevels: [{ type: Schema.Types.Mixed }]
+});
+
+const pageSchema = new Schema({
+  name: { type: String, required: true },
+  description: { type: String, default: 'No description provided' },
+  order: { type: Number, required: true },
+  isCompleted: { type: Boolean, default: false },
+  completedAt: { type: Date },
+  completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  sections: [sectionSchema]
+});
+
 const subLevelSchema = new Schema({
   name: { type: String, required: true },
-  description: { type: String, required: true },
+  description: { type: String, default: 'No description provided' },
   order: { type: Number, required: true },
   isCompleted: { type: Boolean, default: false },
   completedAt: { type: Date },
@@ -97,33 +178,16 @@ const subLevelSchema = new Schema({
 
 subLevelSchema.add({
   subLevels: [subLevelSchema],
-  questions: [{ 
-    text: String,
-    answerType: String,
-    options: [String],
-    required: Boolean
-  }]
+  questions: [questionSchema]
 });
 
 subLevelSchema.set('toJSON', { virtuals: true });
 subLevelSchema.set('toObject', { virtuals: true });
 
-const questionSchema = new Schema({
-  text: String,
-  answerType: String,
-  options: [String],
-  required: Boolean,
-  levelId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'InspectionLevel',
-    default: null
-  }
-});
-
 // Create schema for inspection sets
 const inspectionSetSchema = new Schema({
   name: { type: String, required: true },
-  description: { type: String },
+  description: { type: String, default: 'No description provided' },
   subLevels: [subLevelSchema],
   questions: [questionSchema],
   generalQuestions: [questionSchema]
@@ -151,7 +215,8 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
     enum: ['high', 'medium', 'low'],
     default: 'medium'
   },
-  subLevels: [subLevelSchema],
+  subLevels: [subLevelSchema], // Keep for backward compatibility
+  pages: [pageSchema], // New structure
   sets: [inspectionSetSchema],
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -203,6 +268,10 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   questionnaireNotes: {
     type: String,
     default: ''
+  },
+  requirementType: {
+    type: String,
+    default: 'mandatory'
   },
   isActive: { type: Boolean, default: true }
 }, {

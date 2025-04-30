@@ -17,6 +17,16 @@ interface IQuestion {
   options?: string[];
   required: boolean;
   levelId?: mongoose.Types.ObjectId | string | undefined;
+  description?: string;
+  type?: string;
+  scoring?: {
+    enabled: boolean;
+    max: number;
+    weights?: Record<string, any>;
+  };
+  scores?: Record<string, number>;
+  requirementType?: string;
+  mandatory?: boolean;
 }
 
 const flattenSubLevels = <T extends { subLevels?: any[], [key: string]: any }>(
@@ -52,14 +62,132 @@ const processSubLevels = (subLevels:any) => {
   });
 };
 
+const processQuestions = (questions: any[]) => {
+  if (!questions || !Array.isArray(questions)) return [];
+  
+  return questions.map((question: any) => {
+    if (typeof question === 'object' && question !== null) {
+      const processedQuestion = { ...question };
+      
+      if (question.levelId) {
+        try {
+          processedQuestion.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
+            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
+            : undefined;
+        } catch (err) {
+          processedQuestion.levelId = undefined;
+        }
+      }
+      
+      if (!processedQuestion.description) {
+        processedQuestion.description = '';
+      }
+      
+      return processedQuestion;
+    }
+    
+    try {
+      if (typeof question === 'string') {
+        return JSON.parse(question);
+      }
+      return question;
+    } catch (error) {
+      console.error("Error processing question:", error);
+      return {
+        text: 'Error parsing question',
+        description: '',
+        answerType: 'text',
+        required: false
+      };
+    }
+  });
+};
+
+const processPages = (pages:any) => {
+  if (!pages || !Array.isArray(pages)) return [];
+  
+  return pages.map((page) => {
+    const processedPage = { ...page };
+    
+    if (page.sections && Array.isArray(page.sections)) {
+      processedPage.sections = page.sections.map((section: any) => {
+        const processedSection = { ...section };
+        
+        if (section.questions && Array.isArray(section.questions)) {
+          processedSection.questions = processQuestions(section.questions);
+        }
+        
+        if (!processedSection.description) {
+          processedSection.description = 'No description provided';
+        }
+        
+        return processedSection;
+      });
+    }
+    
+    if (!processedPage.description) {
+      processedPage.description = 'No description provided';
+    }
+    
+    return processedPage;
+  });
+};
+
+const convertPagesToSubLevels = (pages: any[]) => {
+  if (!pages || !Array.isArray(pages)) return [];
+  
+  return pages.map((page: any) => {
+    const pageLevel = {
+      name: page.name,
+      description: page.description || 'No description provided',
+      order: page.order || 0,
+      isCompleted: page.isCompleted || false,
+      subLevels: []
+    };
+    
+    if (page.sections && Array.isArray(page.sections)) {
+      pageLevel.subLevels = page.sections.map((section: any, index: number) => ({
+        name: section.name,
+        description: section.description || 'No description provided',
+        order: section.order || index,
+        isCompleted: section.isCompleted || false,
+        questions: section.questions || []
+      }));
+    }
+    
+    return pageLevel;
+  });
+};
+
 export const createInspectionLevel = catchAsync(async (req: Request, res: Response) => {
-  const inspectionData = {
+  const inspectionData: any = {
     ...req.body,
     createdBy: req.user?._id,
     updatedBy: req.user?._id
   };
   
-  if (inspectionData.subLevels) {
+  if (inspectionData.pages) {
+    inspectionData.pages = processPages(inspectionData.pages);
+    
+    inspectionData.subLevels = convertPagesToSubLevels(inspectionData.pages);
+    
+    const allQuestions: IQuestion[] = [];
+    
+    inspectionData.pages.forEach((page: any) => {
+      if (page.sections) {
+        page.sections.forEach((section: any) => {
+          if (section.questions && section.questions.length > 0) {
+            allQuestions.push(...section.questions);
+          }
+        });
+      }
+    });
+    
+    if (allQuestions.length > 0) {
+      inspectionData.questions = processQuestions(allQuestions);
+    }
+  } 
+  else if (inspectionData.subLevels) {
     inspectionData.subLevels = processSubLevels(inspectionData.subLevels);
   }
   
@@ -72,33 +200,11 @@ export const createInspectionLevel = catchAsync(async (req: Request, res: Respon
       }
       
       if (set.questions && Array.isArray(set.questions)) {
-        processedSet.questions = set.questions.map((question: any) => {
-          if (question.levelId) {
-            try {
-              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-                : undefined;
-            } catch (err) {
-              question.levelId = undefined;
-            }
-          }
-          return question;
-        });
+        processedSet.questions = processQuestions(set.questions);
       }
       
       if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
-        processedSet.generalQuestions = set.generalQuestions.map((question: any) => {
-          if (question.levelId) {
-            try {
-              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-                : undefined;
-            } catch (err) {
-              question.levelId = undefined;
-            }
-          }
-          return question;
-        });
+        processedSet.generalQuestions = processQuestions(set.generalQuestions);
       }
       
       return processedSet;
@@ -106,18 +212,7 @@ export const createInspectionLevel = catchAsync(async (req: Request, res: Respon
   }
   
   if (inspectionData.questions && Array.isArray(inspectionData.questions)) {
-    inspectionData.questions = inspectionData.questions.map((question: any) => {
-      if (question.levelId) {
-        try {
-          question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-            : undefined;
-        } catch (err) {
-          question.levelId = undefined;
-        }
-      }
-      return question;
-    });
+    inspectionData.questions = processQuestions(inspectionData.questions);
   }
   
   const inspection = await InspectionLevel.create(inspectionData);
@@ -188,68 +283,114 @@ export const getInspectionLevel = catchAsync(async (req: Request, res: Response)
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  const processLevels = (levels: any[]) => {
-    if (!levels) return [];
+  // Convert ObjectId to string ID format
+  const processEntity = (entity: any) => {
+    if (!entity) return entity;
+    return {
+      ...entity,
+      id: entity._id ? entity._id.toString() : undefined
+    };
+  };
+
+  // Process questions to ensure they have IDs and standardized format
+  const processQuestions = (questions: any[] = []) => {
+    if (!questions || !Array.isArray(questions)) return [];
     
-    return levels.map((level: any) => {
-      const levelObj = level;
-      
-      if (levelObj.subLevels && levelObj.subLevels.length > 0) {
-        levelObj.subLevels = processLevels(levelObj.subLevels);
+    return questions.map(q => ({
+      ...q,
+      id: q._id ? q._id.toString() : q.id,
+      description: q.description || '',
+      options: q.options || [],
+      scoring: q.scoring || { enabled: false, max: 1 }
+    }));
+  };
+  
+  // Process sections recursively
+  const processSections = (sections: any[] = []) => {
+    if (!sections || !Array.isArray(sections)) return [];
+    
+    return sections.map(section => {
+      const processedSection = processEntity(section);
+      if (section.questions && Array.isArray(section.questions)) {
+        processedSection.questions = processQuestions(section.questions);
       }
-      
-      if (levelObj.questions && Array.isArray(levelObj.questions)) {
-        levelObj.questions = levelObj.questions.map((q: any) => ({
-          ...q,
-          id: q._id || q.id
-        }));
-      }
-      
-      return {
-        ...levelObj,
-        id: levelObj._id
-      };
+      return processedSection;
     });
   };
   
-  const result = inspection;
+  // Process pages to standard format
+  const processPages = (pages: any[] = []) => {
+    if (!pages || !Array.isArray(pages)) return [];
+    
+    return pages.map(page => {
+      const processedPage = processEntity(page);
+      if (page.sections && Array.isArray(page.sections)) {
+        processedPage.sections = processSections(page.sections);
+      }
+      return processedPage;
+    });
+  };
   
-  result.subLevels = processLevels(result.subLevels);
+  // Process old subLevels format recursively
+  const processSubLevels = (subLevels: any[] = [], level = 0) => {
+    if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0) return [];
+    
+    return subLevels.map(sublevel => {
+      const processedSublevel = processEntity(sublevel);
+      
+      if (sublevel.questions && Array.isArray(sublevel.questions)) {
+        processedSublevel.questions = processQuestions(sublevel.questions);
+      }
+      
+      if (sublevel.subLevels && Array.isArray(sublevel.subLevels) && sublevel.subLevels.length > 0) {
+        processedSublevel.subLevels = processSubLevels(sublevel.subLevels, level + 1);
+      }
+      
+      return processedSublevel;
+    });
+  };
   
+  const result = processEntity(inspection);
+  
+  // Process both data structures for compatibility
+  if (result.pages && Array.isArray(result.pages)) {
+    result.pages = processPages(result.pages);
+  } else {
+    result.pages = []; // Ensure pages exists even if empty
+  }
+  
+  if (result.subLevels && Array.isArray(result.subLevels)) {
+    result.subLevels = processSubLevels(result.subLevels);
+  }
+  
+  if (result.questions && Array.isArray(result.questions)) {
+    result.questions = processQuestions(result.questions);
+  }
+  
+  // Process sets for completeness
   if (result.sets && Array.isArray(result.sets)) {
     result.sets = result.sets.map((set: any) => {
-      const processedSet = {
-        ...set,
-        id: set._id || set.id
-      };
+      const processedSet = processEntity(set);
       
       if (set.subLevels && Array.isArray(set.subLevels)) {
-        processedSet.subLevels = processLevels(set.subLevels);
+        processedSet.subLevels = processSubLevels(set.subLevels);
       }
       
       if (set.questions && Array.isArray(set.questions)) {
-        processedSet.questions = set.questions.map((q: any) => ({
-          ...q,
-          id: q._id || q.id
-        }));
+        processedSet.questions = processQuestions(set.questions);
       }
       
       if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
-        processedSet.generalQuestions = set.generalQuestions.map((q: any) => ({
-          ...q,
-          id: q._id || q.id
-        }));
+        processedSet.generalQuestions = processQuestions(set.generalQuestions);
       }
       
       return processedSet;
     });
   }
   
-  if (result.questions && Array.isArray(result.questions)) {
-    result.questions = result.questions.map((q: any) => ({
-      ...q,
-      id: q._id || q.id
-    }));
+  // Add some backward compatibility
+  if (!result.requirementType) {
+    result.requirementType = 'mandatory';
   }
 
   res.send(result);
@@ -265,12 +406,33 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
     throw new ApiError(httpStatus.NOT_FOUND, 'Inspection level not found');
   }
 
-  const updateData = {
+  const updateData: any = {
     ...req.body,
     updatedBy: req.user?._id
   };
-
-  if (updateData.subLevels) {
+  
+  if (updateData.pages) {
+    updateData.pages = processPages(updateData.pages);
+    
+    updateData.subLevels = convertPagesToSubLevels(updateData.pages);
+    
+    const allQuestions: IQuestion[] = [];
+    
+    updateData.pages.forEach((page: any) => {
+      if (page.sections) {
+        page.sections.forEach((section: any) => {
+          if (section.questions && section.questions.length > 0) {
+            allQuestions.push(...section.questions);
+          }
+        });
+      }
+    });
+    
+    if (allQuestions.length > 0) {
+      updateData.questions = processQuestions(allQuestions);
+    }
+  }
+  else if (updateData.subLevels) {
     updateData.subLevels = processSubLevels(updateData.subLevels);
   }
   
@@ -283,33 +445,11 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
       }
       
       if (set.questions && Array.isArray(set.questions)) {
-        processedSet.questions = set.questions.map((question: any) => {
-          if (question.levelId) {
-            try {
-              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-                : undefined;
-            } catch (err) {
-              question.levelId = undefined;
-            }
-          }
-          return question;
-        });
+        processedSet.questions = processQuestions(set.questions);
       }
       
       if (set.generalQuestions && Array.isArray(set.generalQuestions)) {
-        processedSet.generalQuestions = set.generalQuestions.map((question: any) => {
-          if (question.levelId) {
-            try {
-              question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-                ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-                : undefined;
-            } catch (err) {
-              question.levelId = undefined;
-            }
-          }
-          return question;
-        });
+        processedSet.generalQuestions = processQuestions(set.generalQuestions);
       }
       
       return processedSet;
@@ -317,18 +457,7 @@ export const updateInspectionLevel = catchAsync(async (req: Request, res: Respon
   }
   
   if (updateData.questions && Array.isArray(updateData.questions)) {
-    updateData.questions = updateData.questions.map((question: any) => {
-      if (question.levelId) {
-        try {
-          question.levelId = mongoose.Types.ObjectId.isValid(question.levelId.toString()) 
-            ? new mongoose.Types.ObjectId(question.levelId.toString()) 
-            : undefined;
-        } catch (err) {
-          question.levelId = undefined;
-        }
-      }
-      return question;
-    });
+    updateData.questions = processQuestions(updateData.questions);
   }
 
   Object.assign(inspection, updateData);
