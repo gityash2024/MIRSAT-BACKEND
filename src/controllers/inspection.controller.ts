@@ -615,9 +615,16 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
   if (format === 'pdf') {
     try {
       const doc = new PDFDocument({
-        margins: { top: 40, bottom: 50, left: 50, right: 50 },
+        margins: { top: 50, bottom: 50, left: 50, right: 50 },
         size: 'A4',
-        bufferPages: true
+        bufferPages: true,
+        info: {
+          Title: 'Inspection Levels Report',
+          Author: 'MIRSAT System',
+          Subject: 'Inspection Levels Report',
+          Keywords: 'inspection, report, levels',
+          CreationDate: new Date()
+        }
       });
       
       res.setHeader('Content-Type', 'application/pdf');
@@ -625,202 +632,272 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
       
       doc.pipe(res);
       
-      doc.info.Title = 'Inspection Levels Report';
-      doc.info.Author = 'Inspection System';
-      
+      // Define consistent styling values
       const COLORS = {
-        primary: '#1F3F7A',
-        secondary: '#1F3F7A',
-        text: '#333333',
-        subText: '#666666',
-        tableHeader: '#1F3F7A',
-        tableBorder: '#E0E0E0',
-        tableRowEven: '#FFFFFF',
-        tableRowOdd: '#F5F5F5',
-        bulletPrimary: '#1F3F7A',
-        bulletSecondary: '#4A90E2'
+        primary: '#1A237E',              // Dark Navy
+        secondary: '#3949AB',            // Lighter Navy
+        textDark: '#212121',             // Almost Black
+        textMedium: '#424242',           // Dark Gray
+        textLight: '#757575',            // Medium Gray
+        headerBg: '#1A237E',             // Dark Navy Background
+        tableHeaderBg: '#C5CAE9',        // Light Navy for Table Headers
+        tableRowEven: '#FFFFFF',         // White
+        tableRowOdd: '#F5F7FB',          // Very Light Gray
+        tableBorder: '#E0E0E0',          // Light Gray Border
+        bulletLevel1: '#3F51B5',         // Indigo
+        bulletLevel2: '#7986CB'          // Light Indigo
       };
       
       const FONTS = {
+        title: 'Helvetica-Bold',
         heading: 'Helvetica-Bold',
         subheading: 'Helvetica-Bold',
         normal: 'Helvetica',
         italic: 'Helvetica-Oblique'
       };
       
+      // Add header to each page
       const addHeaderToPage = () => {
-        const headerHeight = 50;
+        // Clear the header area first to ensure no overlap
+        doc.rect(0, 0, doc.page.width, 60).fill('#FFFFFF');
         
-        doc.rect(50, 40, doc.page.width - 100, headerHeight)
-           .fillAndStroke(COLORS.primary, COLORS.primary);
+        // Add header background
+        doc.rect(0, 0, doc.page.width, 50).fill(COLORS.headerBg);
         
-        doc.fontSize(18)
-           .fillColor('white')
-           .font(FONTS.heading)
-           .text('Inspection Levels Report', 60, 55, { align: 'center' });
+        // Add title
+        doc.font(FONTS.title).fontSize(22).fillColor('#FFFFFF');
+        doc.text('Inspection Levels Report', 50, 18);
         
-        const dateText = `Generated on: ${new Date().toLocaleDateString()}`;
+        // Add date on the right side
+        const dateText = `Generated: ${new Date().toLocaleDateString()}`;
         const dateWidth = doc.widthOfString(dateText);
+        doc.fontSize(10);
+        doc.text(dateText, doc.page.width - 50 - dateWidth, 20);
         
-        doc.fontSize(9)
-           .fillColor('white')
-           .font(FONTS.normal)
-           .text(dateText, doc.page.width - 60 - dateWidth, 55, { align: 'right' });
-           
-        doc.moveDown(2);
+        // Add page divider
+        doc.rect(50, 60, doc.page.width - 100, 1).fill(COLORS.tableBorder);
+        
+        // Set position for content to start after header
+        doc.y = 70;
       };
       
+      // Function to create a properly formatted table header
+      const createTableHeader = (title: string, x: number, y: number, width: number, options: any = {}) => {
+        const height = options.height || 30;
+        const fontSize = options.fontSize || 12;
+        const color = options.color || '#FFFFFF';
+        const bg = options.bg || COLORS.secondary;
+        
+        // Draw background
+        doc.rect(x, y, width, height).fill(bg);
+        
+        // Add title text
+        doc.font(FONTS.heading).fontSize(fontSize).fillColor(color);
+        doc.text(title, x + 10, y + (height - fontSize) / 2, { width: width - 20 });
+        
+        return y + height;
+      };
+      
+      // Function to create a table row with proper cell alignment
+      const createTableRow = (data: { label: string, value: string }, x: number, y: number, width: number, options: any = {}) => {
+        const height = options.height || 25;
+        const colWidth1 = options.labelWidth || width * 0.3;
+        const colWidth2 = width - colWidth1;
+        const fontSize = options.fontSize || 10;
+        const bg = options.bg || '#FFFFFF';
+        const borderColor = options.borderColor || COLORS.tableBorder;
+        
+        // Draw background
+        doc.rect(x, y, width, height).fill(bg).strokeColor(borderColor).stroke();
+        
+        // Add divider between columns
+        doc.moveTo(x + colWidth1, y).lineTo(x + colWidth1, y + height)
+           .strokeColor(borderColor).stroke();
+        
+        // Add label text
+        doc.font(FONTS.normal).fontSize(fontSize).fillColor(COLORS.textDark);
+        doc.text(data.label, x + 5, y + (height - fontSize) / 2, { width: colWidth1 - 10 });
+        
+        // Add value text with overflow handling
+        doc.text(data.value || 'N/A', x + colWidth1 + 5, y + (height - fontSize) / 2, { 
+          width: colWidth2 - 10,
+          ellipsis: true
+        });
+        
+        return y + height;
+      };
+      
+      // Function to format text safely
+      const safeText = (text: any): string => {
+        if (text === null || text === undefined) return 'N/A';
+        return String(text).replace(/[\r\n]+/g, ' ');
+      };
+      
+      // Process each inspection
       for (let i = 0; i < inspections.length; i++) {
         const inspection = inspections[i];
         
+        // Add new page for each inspection except the first
         if (i > 0) {
           doc.addPage();
         }
         
+        // Add header to the page
         addHeaderToPage();
         
-        const tableTop = doc.y + 20;
+        // Add inspection name as a title
+        doc.font(FONTS.heading).fontSize(16).fillColor(COLORS.primary);
+        doc.text(safeText(inspection.name || `Inspection Level ${i + 1}`), 50, doc.y);
+        doc.moveDown(0.5);
+        
+        // Create metadata table for inspection details
+        let y = doc.y;
         const tableWidth = doc.page.width - 100;
-        const colWidth1 = 150;
-        const colWidth2 = tableWidth - colWidth1;
-        const rowHeight = 30;
         
-        doc.rect(50, tableTop, colWidth1, rowHeight)
-           .fillAndStroke(COLORS.tableHeader, COLORS.tableHeader);
-        doc.rect(50 + colWidth1, tableTop, colWidth2, rowHeight)
-           .fillAndStroke(COLORS.tableHeader, COLORS.tableHeader);
+        // Add metadata section header
+        y = createTableHeader('Inspection Details', 50, y, tableWidth, {
+          bg: COLORS.secondary,
+          fontSize: 12
+        });
         
-        doc.fillColor('white')
-           .fontSize(12)
-           .font(FONTS.heading)
-           .text('Property', 60, tableTop + 10)
-           .text('Value', 60 + colWidth1, tableTop + 10);
+        // Add metadata rows
+        y = createTableRow({ label: 'Type', value: safeText(inspection.type) }, 50, y, tableWidth, {
+          bg: COLORS.tableRowEven
+        });
         
-        const addRow = (label: string, value: string, rowIndex: number) => {
-          const y = tableTop + (rowIndex * rowHeight);
-          const bgColor = rowIndex % 2 === 0 ? COLORS.tableRowEven : COLORS.tableRowOdd;
-          
-          doc.rect(50, y + rowHeight, colWidth1, rowHeight)
-             .fillAndStroke(bgColor, COLORS.tableBorder);
-          doc.rect(50 + colWidth1, y + rowHeight, colWidth2, rowHeight)
-             .fillAndStroke(bgColor, COLORS.tableBorder);
-          
-          doc.fillColor(COLORS.text)
-             .fontSize(11)
-             .font(FONTS.normal)
-             .text(label, 60, y + rowHeight + 10)
-             .text(value || 'N/A', 60 + colWidth1, y + rowHeight + 10);
-        };
+        y = createTableRow({ label: 'Status', value: safeText(inspection.status) }, 50, y, tableWidth, {
+          bg: COLORS.tableRowOdd
+        });
         
-        addRow('Type', inspection.type || 'N/A', 0);
-        addRow('Status', inspection.status || 'N/A', 1);
-        addRow('Priority', inspection.priority?.toString() || 'N/A', 2);
+        y = createTableRow({ label: 'Priority', value: safeText(inspection.priority) }, 50, y, tableWidth, {
+          bg: COLORS.tableRowEven
+        });
         
-        const descriptionTop = tableTop + (4 * rowHeight) + 20;
+        // Add description section
+        doc.moveDown(1);
+        y = doc.y;
+        y = createTableHeader('Description', 50, y, tableWidth, {
+          bg: COLORS.secondary,
+          fontSize: 12
+        });
         
-        doc.rect(50, descriptionTop, tableWidth, 30)
-           .fillAndStroke(COLORS.secondary, COLORS.secondary);
+        // Add description content with word wrapping
+        doc.font(FONTS.normal).fontSize(10).fillColor(COLORS.textDark);
+        doc.rect(50, y, tableWidth, 60).fill(COLORS.tableRowEven).strokeColor(COLORS.tableBorder).stroke();
         
-        doc.fillColor('white')
-           .fontSize(12)
-           .font(FONTS.heading)
-           .text('Description', 60, descriptionTop + 10);
+        // Handle long descriptions with proper wrapping
+        const descText = inspection.description || 'No description provided';
+        doc.text(descText, 60, y + 10, { 
+          width: tableWidth - 20,
+          height: 40,
+          ellipsis: true
+        });
         
-        doc.rect(50, descriptionTop + 30, tableWidth, 50)
-           .fillAndStroke(COLORS.tableRowEven, COLORS.tableBorder);
-           
-        doc.fontSize(10)
-           .fillColor(COLORS.text)
-           .font(FONTS.normal)
-           .text(inspection.description || 'No description provided', 60, descriptionTop + 40, { 
-             width: tableWidth - 20,
-             height: 40
-           });
+        y += 60;
+        doc.moveDown(1);
         
-        const subLevelsTop = descriptionTop + 100;
-        
-        doc.rect(50, subLevelsTop, tableWidth, 30)
-           .fillAndStroke(COLORS.secondary, COLORS.secondary);
-           
-        doc.fillColor('white')
-           .fontSize(12)
-           .font(FONTS.heading)
-           .text('Sub Levels:', 60, subLevelsTop + 10);
-           
-        doc.y = subLevelsTop + 40;
+        // Add sublevels section
+        y = doc.y;
+        y = createTableHeader('Sub Levels', 50, y, tableWidth, {
+          bg: COLORS.secondary,
+          fontSize: 12
+        });
         
         if (inspection.subLevels && inspection.subLevels.length > 0) {
-          const processSubLevelsForPDF = (subLevels: any[], level = 0, maxDepth = 10): void => {
+          // Process sublevels with proper indentation and formatting
+          const renderSubLevels = (subLevels: any[], level = 0, baseY = y, maxDepth = 10): number => {
             if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0 || level >= maxDepth) {
-              return;
+              return baseY;
             }
             
-            for (let i = 0; i < subLevels.length; i++) {
-              const item = subLevels[i];
-              if (!item) continue;
+            let currentY = baseY;
+            
+            for (let j = 0; j < subLevels.length; j++) {
+              const subLevel = subLevels[j];
+              if (!subLevel) continue;
               
-              if (doc.y > doc.page.height - 100) {
+              // Check if we need a new page
+              if (currentY > doc.page.height - 100) {
                 doc.addPage();
                 addHeaderToPage();
+                currentY = doc.y;
               }
               
+              // Calculate indentation and bullet position
               const indent = 15 * level;
               const bulletX = 60 + indent;
-              const bulletY = doc.y + 4;
-              
-              if (level === 0) {
-                doc.circle(bulletX, bulletY, 3)
-                   .fill(COLORS.bulletPrimary);
-              } else {
-                doc.circle(bulletX, bulletY, 2)
-                   .fill(COLORS.bulletSecondary);
-              }
-              
               const textX = bulletX + 10;
               
-              doc.fontSize(level === 0 ? 11 : 10)
-                 .font(level === 0 ? FONTS.subheading : FONTS.normal)
-                 .fillColor(COLORS.text);
-                 
-              const nameText = item.name || 'Unnamed';
-              doc.text(nameText, textX, doc.y, { 
-                continued: item.description ? true : false
-              });
+              // Draw bullet based on level
+              doc.circle(bulletX, currentY + 5, level === 0 ? 3 : 2)
+                 .fill(level === 0 ? COLORS.bulletLevel1 : COLORS.bulletLevel2);
               
-              if (item.description) {
+              // Format and add sublevel name
+              doc.font(level === 0 ? FONTS.subheading : FONTS.normal)
+                 .fontSize(level === 0 ? 11 : 10)
+                 .fillColor(COLORS.textDark);
+              
+              const nameText = safeText(subLevel.name) || 'Unnamed';
+              const textOptions = { 
+                width: tableWidth - indent - 20,
+                ellipsis: true,
+                lineBreak: true
+              };
+              
+              doc.text(nameText, textX, currentY, textOptions);
+              currentY += doc.heightOfString(nameText, textOptions);
+              
+              // Add description if available
+              if (subLevel.description) {
                 doc.font(FONTS.italic)
-                   .fillColor(COLORS.subText)
-                   .fontSize(level === 0 ? 10 : 9)
-                   .text(` - ${item.description}`);
-              } else {
-                doc.moveDown(0.5);
+                   .fontSize(9)
+                   .fillColor(COLORS.textLight);
+                
+                const descText = `Description: ${safeText(subLevel.description)}`;
+                doc.text(descText, textX, currentY, { 
+                  width: tableWidth - indent - 20,
+                  ellipsis: true,
+                  lineBreak: true
+                });
+                
+                currentY += doc.heightOfString(descText, { 
+                  width: tableWidth - indent - 20,
+                  ellipsis: true
+                });
               }
               
-              if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
-                processSubLevelsForPDF(item.subLevels, level + 1, maxDepth);
+              currentY += 5; // Add spacing between items
+              
+              // Process child sublevels if any
+              if (subLevel.subLevels && Array.isArray(subLevel.subLevels) && subLevel.subLevels.length > 0) {
+                currentY = renderSubLevels(subLevel.subLevels, level + 1, currentY, maxDepth);
               }
             }
+            
+            return currentY;
           };
           
-          processSubLevelsForPDF(inspection.subLevels);
+          // Render all sublevels with hierarchy
+          y = renderSubLevels(inspection.subLevels);
           
         } else {
-          doc.fontSize(11)
-             .font(FONTS.italic)
-             .fillColor(COLORS.subText)
-             .text('No sub levels defined for this inspection level.', 60, doc.y);
+          // Show message if no sublevels
+          doc.font(FONTS.italic).fontSize(10).fillColor(COLORS.textLight);
+          doc.text('No sub levels defined for this inspection level.', 60, y + 10);
+          y += 30;
         }
       }
       
+      // Add page numbers to all pages
       const pageCount = doc.bufferedPageRange().count;
       for (let i = 0; i < pageCount; i++) {
         doc.switchToPage(i);
         
-        const pageText = `Page ${i + 1} / ${pageCount}`;
+        const pageText = `Page ${i + 1} of ${pageCount}`;
         const textWidth = doc.widthOfString(pageText);
         
-        doc.fontSize(10)
-           .fillColor(COLORS.subText)
+        doc.fontSize(8)
+           .fillColor(COLORS.textLight)
            .text(
              pageText,
              (doc.page.width - textWidth) / 2,
@@ -837,6 +914,7 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
   } 
   else if (format === 'docx') {
     try {
+      // Enhanced DOCX generation with better styling
       const createBorder = () => {
         return {
           top: { style: "single" as const, size: 1, color: "E0E0E0" },
@@ -846,28 +924,45 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         };
       };
       
+      // Document title with better styling
       const titleParagraph = new Paragraph({
-        text: 'Inspection Levels Report',
-        heading: 'Heading1',
+        children: [
+          new TextRun({ 
+            text: 'Inspection Levels Report',
+            size: 36,
+            bold: true,
+            color: "1A237E",
+          }),
+        ],
         alignment: 'center',
+        spacing: {
+          before: 200,
+          after: 200,
+        }
       });
       
+      // Date with better positioning
       const dateParagraph = new Paragraph({
         children: [
           new TextRun({ 
             text: `Generated on: ${new Date().toLocaleDateString()}`,
-            size: 18,
+            size: 20,
             color: "666666",
           }),
         ],
         alignment: "center",
+        spacing: {
+          after: 400,
+        }
       });
       
       const sections: (Paragraph | docx.Table)[] = [];
       
+      // Process each inspection
       for (let index = 0; index < inspections.length; index++) {
         const inspection = inspections[index];
         
+        // Add page break between inspections
         if (index > 0) {
           sections.push(new Paragraph({ 
             text: "", 
@@ -875,37 +970,54 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
           }));
         }
         
+        // Inspection title with better styling
         sections.push(new Paragraph({
           children: [
             new TextRun({ 
-              text: `${index + 1}. ${inspection.name || 'Unnamed'}`,
+              text: `${index + 1}. ${inspection.name || 'Unnamed Inspection Level'}`,
               bold: true,
               size: 28,
               color: "1A237E",
             }),
           ],
-          shading: {
-            type: "clear",
-            fill: "F5F5F5",
-          },
-          border: createBorder(),
           spacing: {
             before: 200,
             after: 200,
           },
         }));
         
+        // Details section title
         sections.push(new Paragraph({
-          text: "Inspection Details",
-          heading: "Heading3",
+          children: [
+            new TextRun({
+              text: "Inspection Details",
+              bold: true,
+              size: 24,
+              color: "3949AB", // Lighter navy
+            }),
+          ],
+          spacing: {
+            before: 100,
+            after: 100,
+          },
         }));
         
+        // Metadata table with improved styling
         const metadataTable = new docx.Table({
           width: {
             size: 100,
             type: "pct",
           },
+          borders: {
+            top: { style: "single", size: 1, color: "C5CAE9" },
+            bottom: { style: "single", size: 1, color: "C5CAE9" },
+            left: { style: "single", size: 1, color: "C5CAE9" },
+            right: { style: "single", size: 1, color: "C5CAE9" },
+            insideHorizontal: { style: "single", size: 1, color: "C5CAE9" },
+            insideVertical: { style: "single", size: 1, color: "C5CAE9" },
+          },
           rows: [
+            // Header row
             new docx.TableRow({
               tableHeader: true,
               children: [
@@ -913,10 +1025,11 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                   children: [new Paragraph({
                     text: "Property",
                     alignment: "center",
+                    spacing: { before: 50, after: 50 },
                   })],
                   shading: {
                     type: "clear",
-                    fill: "1A237E",
+                    fill: "3949AB", // Lighter navy
                   },
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
@@ -924,55 +1037,77 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                   children: [new Paragraph({
                     text: "Value",
                     alignment: "center",
+                    spacing: { before: 50, after: 50 },
                   })],
                   shading: {
                     type: "clear",
-                    fill: "1A237E",
+                    fill: "3949AB", // Lighter navy
                   },
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
               ],
             }),
+            // Type row
             new docx.TableRow({
               children: [
                 new docx.TableCell({
-                  children: [new Paragraph("Type")],
+                  children: [new Paragraph({
+                    text: "Type",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
                 new docx.TableCell({
-                  children: [new Paragraph(inspection.type || "N/A")],
+                  children: [new Paragraph({
+                    text: inspection.type || "N/A",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
               ],
             }),
+            // Status row with alternating color
             new docx.TableRow({
               children: [
                 new docx.TableCell({
-                  children: [new Paragraph("Status")],
+                  children: [new Paragraph({
+                    text: "Status",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                   shading: {
                     type: "clear",
-                    fill: "F5F5F5",
+                    fill: "F5F7FB", // Light background
                   },
                 }),
                 new docx.TableCell({
-                  children: [new Paragraph(inspection.status || "N/A")],
+                  children: [new Paragraph({
+                    text: inspection.status || "N/A",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                   shading: {
                     type: "clear",
-                    fill: "F5F5F5",
+                    fill: "F5F7FB", // Light background
                   },
                 }),
               ],
             }),
+            // Priority row
             new docx.TableRow({
               children: [
                 new docx.TableCell({
-                  children: [new Paragraph("Priority")],
+                  children: [new Paragraph({
+                    text: "Priority",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
                 new docx.TableCell({
-                  children: [new Paragraph(inspection.priority?.toString() || "N/A")],
+                  children: [new Paragraph({
+                    text: inspection.priority?.toString() || "N/A",
+                    spacing: { before: 30, after: 30 },
+                  })],
                   verticalAlign: docx.VerticalAlign.CENTER,
                 }),
               ],
@@ -982,21 +1117,59 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         
         sections.push(metadataTable);
         
+        // Description section with better styling
         sections.push(new Paragraph({
-          text: "Description",
-          heading: "Heading3",
+          children: [
+            new TextRun({
+              text: "Description",
+              bold: true,
+              size: 24,
+              color: "3949AB", // Lighter navy
+            }),
+          ],
+          spacing: {
+            before: 200,
+            after: 100,
+          },
         }));
         
+        // Description content with border
         sections.push(new Paragraph({
           text: inspection.description || "No description provided",
+          border: {
+            top: { style: "single", size: 1, color: "E0E0E0" },
+            bottom: { style: "single", size: 1, color: "E0E0E0" },
+            left: { style: "single", size: 1, color: "E0E0E0" },
+            right: { style: "single", size: 1, color: "E0E0E0" },
+          },
+          spacing: {
+            before: 30,
+            after: 200,
+          },
+          shading: {
+            type: "clear",
+            fill: "F5F7FB", // Light background
+          },
         }));
         
+        // Sub levels section
         if (inspection.subLevels && inspection.subLevels.length > 0) {
           sections.push(new Paragraph({
-            text: "Sub Levels",
-            heading: "Heading3",
+            children: [
+              new TextRun({
+                text: "Sub Levels",
+                bold: true,
+                size: 24,
+                color: "3949AB", // Lighter navy
+              }),
+            ],
+            spacing: {
+              before: 100,
+              after: 100,
+            },
           }));
           
+          // Process sublevels with recursive function for proper hierarchy
           const processSubLevelsForDocx = (subLevels: any[], level = 0, paragraphs: Paragraph[] = [], maxDepth = 10): Paragraph[] => {
             if (!subLevels || !Array.isArray(subLevels) || subLevels.length === 0 || level >= maxDepth) {
               return paragraphs;
@@ -1005,18 +1178,18 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
             for (const item of subLevels) {
               if (!item) continue;
               
-              const indent = 720 * level;
+              const indent = 720 * level; // Proper indentation for hierarchy
               
+              // Create paragraph for sublevel name with proper formatting
               paragraphs.push(
                 new Paragraph({
                   children: [
                     new TextRun({
                       text: item.name || 'Unnamed',
                       bold: level === 0,
+                      size: level === 0 ? 22 : 20,
+                      color: level === 0 ? "3949AB" : "3F51B5", // Different colors by level
                     }),
-                    ...(item.description ? [new TextRun({
-                      text: ` - ${item.description}`,
-                    })] : []),
                   ],
                   bullet: {
                     level: level,
@@ -1026,11 +1199,34 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                   },
                   spacing: {
                     before: 100,
-                    after: 100,
+                    after: level === 0 ? 50 : 30,
                   },
                 })
               );
               
+              // Add description if available
+              if (item.description) {
+                paragraphs.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: item.description,
+                        italics: true,
+                        color: "757575", // Medium gray
+                      }),
+                    ],
+                    indent: {
+                      left: indent + 360, // Extra indent for description
+                    },
+                    spacing: {
+                      before: 30,
+                      after: 80,
+                    },
+                  })
+                );
+              }
+              
+              // Process child sublevels if any
               if (item.subLevels && Array.isArray(item.subLevels) && item.subLevels.length > 0) {
                 processSubLevelsForDocx(item.subLevels, level + 1, paragraphs, maxDepth);
               }
@@ -1039,25 +1235,31 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
             return paragraphs;
           };
           
+          // Process and add all sublevels
           const subLevelParagraphs = processSubLevelsForDocx(inspection.subLevels);
-          
           sections.push(...subLevelParagraphs);
           
         } else {
+          // Message for no sublevels
           sections.push(
             new Paragraph({
               children: [
                 new TextRun({
                   text: 'No sub levels defined for this inspection level.',
-                  color: "666666",
+                  color: "757575", // Medium gray
                   italics: true,
                 }),
               ],
+              spacing: {
+                before: 100,
+                after: 100,
+              },
             })
           );
         }
       }
       
+      // Create document with proper styling and page layout
       const doc = new Document({
         sections: [
           {
@@ -1071,6 +1273,42 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
                 },
               },
             },
+            // Add header, footer if needed
+            headers: {
+              default: new docx.Header({
+                children: [
+                  new Paragraph({
+                    text: "Inspection Levels Report",
+                    alignment: docx.AlignmentType.RIGHT,
+                    border: {
+                      bottom: {
+                        color: "C5CAE9",
+                        space: 1,
+                        style: "single",
+                        size: 6,
+                      },
+                    },
+                  }),
+                ],
+              }),
+            },
+            footers: {
+              default: new docx.Footer({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun("Page "),
+                      new TextRun({
+                        children: ["PAGE", "NUMPAGES"],
+                        style: "PageNumber",
+                      }),
+                      new TextRun(" | MIRSAT Inspection System"),
+                    ],
+                    alignment: docx.AlignmentType.CENTER,
+                  }),
+                ],
+              }),
+            },
             children: [
               titleParagraph,
               dateParagraph,
@@ -1080,6 +1318,7 @@ export const exportInspectionLevels = catchAsync(async (req: Request, res: Respo
         ],
       });
       
+      // Set proper response headers for DOCX download
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', 'attachment; filename=inspection-levels.docx');
       

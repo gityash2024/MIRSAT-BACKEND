@@ -4,6 +4,19 @@ import { User } from '../models/User';
 import InspectionLevel from '../models/InspectionLevel';
 import { catchAsync } from '../utils/catchAsync';
 
+// Define interface for table options
+interface TableOptions {
+  cellPadding?: number;
+  fontSize?: number;
+  headerColor?: string;
+  textColor?: string;
+  borderColor?: string;
+  cellHeight?: number;
+  columnWidths?: number[];
+  align?: string;
+  rowColor?: string;
+}
+
 export const getPerformanceMetrics = catchAsync(async (req: Request, res: Response) => {
   const { startDate, endDate } = req.query;
   
@@ -706,3 +719,352 @@ function getPriorityColor(priority: string): string {
     default: return '#9e9e9e';
   }
 }
+
+// Update the createTableHeader function with improved styling and text handling
+const createTableHeader = (doc: any, headers: string[], startX: number, startY: number, width: number, options: TableOptions = {}) => {
+  const cellPadding = options.cellPadding || 5;
+  const fontSize = options.fontSize || 10;
+  const headerColor = options.headerColor || '#1A237E';
+  const textColor = options.textColor || '#FFFFFF';
+  const borderColor = options.borderColor || '#cccccc';
+  const cellHeight = options.cellHeight || 25;
+  
+  // Calculate column widths if not provided
+  const columnCount = headers.length;
+  const columnWidth = width / columnCount;
+  const columnWidths = options.columnWidths || Array(columnCount).fill(columnWidth);
+  
+  // Draw header background
+  doc.fillColor(headerColor)
+     .rect(startX, startY, width, cellHeight)
+     .fill();
+  
+  // Draw header text with proper encoding
+  doc.fillColor(textColor)
+     .font('Helvetica-Bold')
+     .fontSize(fontSize);
+  
+  let currentX = startX;
+  headers.forEach((header, index) => {
+    const cellWidth = columnWidths[index];
+    
+    // Ensure text fits in the cell or truncate with ellipsis
+    let textOptions = {
+      width: cellWidth - (cellPadding * 2),
+      align: options.align || 'left',
+      lineBreak: false,
+      ellipsis: true
+    };
+    
+    doc.text(
+      header,
+      currentX + cellPadding,
+      startY + cellPadding,
+      textOptions
+    );
+    currentX += cellWidth;
+  });
+  
+  // Draw header border
+  doc.strokeColor(borderColor)
+     .lineWidth(1)
+     .rect(startX, startY, width, cellHeight)
+     .stroke();
+  
+  return startY + cellHeight;
+};
+
+// Update createTableRow function for better text handling and alignment
+const createTableRow = (doc: any, cells: string[], startX: number, startY: number, width: number, options: TableOptions = {}) => {
+  const cellPadding = options.cellPadding || 5;
+  const fontSize = options.fontSize || 9;
+  const rowColor = options.rowColor || '#ffffff';
+  const textColor = options.textColor || '#333333';
+  const borderColor = options.borderColor || '#cccccc';
+  const cellHeight = options.cellHeight || 30;
+  
+  // Calculate column widths if not provided
+  const columnCount = cells.length;
+  const columnWidth = width / columnCount;
+  const columnWidths = options.columnWidths || Array(columnCount).fill(columnWidth);
+  
+  // Draw row background
+  doc.fillColor(rowColor)
+     .rect(startX, startY, width, cellHeight)
+     .fill();
+  
+  // Draw cell text with better text handling
+  doc.fillColor(textColor)
+     .font('Helvetica')
+     .fontSize(fontSize);
+  
+  let currentX = startX;
+  cells.forEach((cell, index) => {
+    const cellWidth = columnWidths[index];
+    
+    // Sanitize text to prevent encoding issues
+    const sanitizedText = cell ? String(cell).replace(/[^\x00-\x7F]/g, '') : '';
+    
+    // Allow wrapping for longer text
+    let textOptions = {
+      width: cellWidth - (cellPadding * 2),
+      align: options.align || 'left',
+      lineBreak: true,
+      height: cellHeight - (cellPadding * 2)
+    };
+    
+    doc.text(
+      sanitizedText,
+      currentX + cellPadding,
+      startY + cellPadding,
+      textOptions
+    );
+    currentX += cellWidth;
+  });
+  
+  // Draw row border
+  doc.strokeColor(borderColor)
+     .lineWidth(0.5)
+     .rect(startX, startY, width, cellHeight)
+     .stroke();
+  
+  return startY + cellHeight;
+};
+
+// Add a function to generate properly formatted inspection level report
+export const generateInspectionLevelReport = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  try {
+    // Fetch the inspection level data
+    const inspectionLevel = await InspectionLevel.findById(id)
+      .populate('createdBy', 'name')
+      .populate('updatedBy', 'name');
+    
+    if (!inspectionLevel) {
+      return res.status(404).json({ error: 'Inspection level not found' });
+    }
+    
+    // Create a new PDF document
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({
+      margin: 50,
+      size: 'A4'
+    });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=inspection-level-${String(id)}.pdf`);
+    
+    // Pipe the PDF to the response
+    doc.pipe(res);
+    
+    // Add document title and metadata
+    const titleOptions = {
+      fontSize: 18,
+      align: 'center',
+      color: '#ffffff',
+      backgroundColor: '#1A237E',
+      padding: 10
+    };
+
+    // Update document title and metadata section
+    const formatTitle = () => {
+      // Clear header area
+      doc.rect(50, 50, doc.page.width - 100, 60)
+         .fill('#FFFFFF');
+       
+      // Draw title background
+      doc.rect(50, 50, doc.page.width - 100, 40)
+         .fill(titleOptions.backgroundColor);
+         
+      // Add title text
+      doc.font('Helvetica-Bold')
+         .fontSize(titleOptions.fontSize)
+         .fillColor(titleOptions.color)
+         .text('Inspection Levels Report', 
+               50, 
+               60, 
+               { 
+                 width: doc.page.width - 100, 
+                 align: 'center' 
+               });
+      
+      // Add generation date in its own space
+      doc.font('Helvetica')
+         .fontSize(8)
+         .fillColor('#333333')
+         .text(`Generated: ${new Date().toLocaleDateString()}`, 
+               50, 
+               95, 
+               { 
+                 width: doc.page.width - 100,
+                 align: 'right' 
+               });
+    };
+
+    // Use the new function instead of the previous code
+    formatTitle();
+
+    // Start content at updated y position (after title and date)
+    let yPosition = 130;
+    
+    // Basic information section
+    doc.font('Helvetica-Bold')
+       .fontSize(14)
+       .fillColor('#333333')
+       .text('Basic Information', 50, yPosition);
+    
+    yPosition += 25;
+    
+    // Create table for basic info
+    const basicInfoHeaders = ['Property', 'Value'];
+    const basicInfoWidth = doc.page.width - 100;
+    const columnWidths = [basicInfoWidth * 0.3, basicInfoWidth * 0.7];
+    
+    const tableOptions = {
+      cellPadding: 8,
+      fontSize: 10,
+      headerColor: '#1A237E',
+      textColor: '#FFFFFF',
+      borderColor: '#cccccc',
+      cellHeight: 30,
+      columnWidths: columnWidths
+    };
+    
+    yPosition = createTableHeader(doc, basicInfoHeaders, 50, yPosition, basicInfoWidth, tableOptions);
+    
+    // Add rows with basic information
+    const basicInfoRows = [
+      ['Type', inspectionLevel.type || 'N/A'],
+      ['Status', inspectionLevel.status || 'N/A'],
+      ['Priority', inspectionLevel.priority || 'N/A']
+    ];
+    
+    // Add rows
+    basicInfoRows.forEach(row => {
+      yPosition = createTableRow(doc, row, 50, yPosition, basicInfoWidth, {
+        ...tableOptions,
+        rowColor: '#f9f9f9',
+        textColor: '#333333'
+      });
+    });
+    
+    // Description section
+    yPosition += 30;
+    doc.font('Helvetica-Bold')
+       .fontSize(14)
+       .fillColor('#333333')
+       .text('Description', 50, yPosition);
+    
+    yPosition += 25;
+    
+    // Draw description box
+    doc.rect(50, yPosition, basicInfoWidth, 80)
+       .fillAndStroke('#f9f9f9', '#cccccc');
+    
+    doc.font('Helvetica')
+       .fontSize(10)
+       .fillColor('#333333')
+       .text(inspectionLevel.description || 'No description provided', 
+             60, 
+             yPosition + 10, 
+             { 
+               width: basicInfoWidth - 20,
+               height: 60,
+               lineBreak: true
+             });
+    
+    yPosition += 100;
+    
+    // Sub-levels section
+    doc.font('Helvetica-Bold')
+       .fontSize(14)
+       .fillColor('#333333')
+       .text('Sub Levels:', 50, yPosition);
+    
+    yPosition += 25;
+    
+    // Create sub-levels section
+    if (inspectionLevel.subLevels && inspectionLevel.subLevels.length > 0) {
+      const renderSubLevels = (subLevels: any[], level = 0, prefix = '') => {
+        subLevels.forEach((subLevel, index) => {
+          const bulletPoint = level === 0 ? '• ' : level === 1 ? '- ' : '  ';
+          const levelPrefix = level === 0 ? `${bulletPoint}` : 
+                             (level === 1 ? `${bulletPoint}` : 
+                             `${prefix}${bulletPoint}`);
+        
+          const displayName = subLevel.name || 'Unnamed';
+          const indentation = level * 15;
+        
+          doc.font('Helvetica-Bold')
+             .fontSize(11 - level)
+             .fillColor('#333333')
+             .text(`${levelPrefix}${displayName}`, 
+                   50 + indentation, 
+                   yPosition);
+        
+          yPosition += 20;
+        
+          // Description
+          const descriptionText = subLevel.description || 'No description provided';
+          doc.font('Helvetica')
+             .fontSize(9)
+             .fillColor('#666666')
+             .text(`${level > 0 ? '  ' : ''}${descriptionText}`, 
+                   70 + indentation, 
+                   yPosition, 
+                   { 
+                     width: doc.page.width - 150 - indentation,
+                     lineBreak: true
+                   });
+        
+          yPosition += 25;
+        
+          // Add a new page if needed
+          if (yPosition > doc.page.height - 100) {
+            doc.addPage();
+            yPosition = 50;
+          }
+        
+          // Recursively render child levels
+          if (subLevel.subLevels && subLevel.subLevels.length > 0) {
+            const newPrefix = level === 0 ? `${index + 1}` : `${prefix}${index + 1}.`;
+            renderSubLevels(subLevel.subLevels, level + 1, newPrefix);
+          }
+        });
+      };
+    
+      renderSubLevels(inspectionLevel.subLevels);
+    } else {
+      doc.font('Helvetica')
+         .fontSize(10)
+         .fillColor('#666666')
+         .text('No sub-levels defined', 50, yPosition);
+    
+      yPosition += 25;
+    }
+    
+    // Page numbering
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      doc.fontSize(8)
+         .fillColor('#666666')
+         .text(`Page ${i + 1} / ${totalPages}`, 
+               doc.page.width / 2, 
+               doc.page.height - 50, 
+               { 
+                 align: 'center' 
+               });
+    }
+    
+    // Finalize the PDF
+    doc.end();
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({ error: 'Failed to generate PDF report' });
+  }
+
+  return res.status(200).end();
+});

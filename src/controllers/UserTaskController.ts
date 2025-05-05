@@ -42,26 +42,37 @@ interface ISubLevel {
 }
 
 interface ITask extends mongoose.Document {
-  assignedTo: any[];
-  inspectionLevel: any;
-  progress: ITaskProgress[];
-  overallProgress: number;
-  status: string;
-  statusHistory: IStatusHistory[];
-  createdAt: Date;
-  updatedAt: Date;
-  questionnaireCompleted?: boolean;
-  questionnaireResponses?: object;
-  questionnaireNotes?: string;
   title: string;
-  description: string;
+  description?: string;
   priority: string;
-  deadline: Date;
+  status: string;
+  deadline?: Date;
+  overallProgress?: number;
+  flaggedItems?: Array<any>;
+  progress?: Array<ITaskProgress>;
+  inspectionLevel?: any;
+  assignedTo?: Array<any>;
+  createdBy?: any;
+  statusHistory?: IStatusHistory[];
+  createdAt?: Date;
+  updatedAt?: Date;
+  reports?: Array<any>;
+  comments?: Array<any>;
+  asset?: any;
+  questionnaireResponses?: Record<string, any>;
+  questions?: Array<any>;
+  questionnaireCompleted?: boolean;
+  questionnaireNotes?: string;
   location?: string;
-  comments?: any[];
-  questions?: any[];
   attachments?: any[];
   toObject(): any;
+}
+
+interface ITaskExtended extends ITask {
+  questions?: Array<any>;
+  questionnaireResponses?: Record<string, any>;
+  questionnaireCompleted?: boolean;
+  questionnaireNotes?: string;
 }
 
 export const getUserTasks = catchAsync(async (req: Request, res: Response) => {
@@ -590,7 +601,7 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
 
 async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promise<void> {
   const colors = {
-    primary: 'var(--color-navy)',
+    primary: '#1A237E', // Color navy - more standardized
     secondary: '#3949ab',
     text: '#333333',
     lightText: '#666666',
@@ -604,15 +615,19 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
 
   let yPos = 50;
   const maxWidth = 495;
+  const pageWidth = 595.28; // A4 width in points
+  const leftMargin = 50;
+  const rightMargin = 50;
+  const contentWidth = pageWidth - leftMargin - rightMargin;
 
   // Utility functions for consistent drawing
   const drawSectionHeader = (text: string): number => {
     doc.fontSize(16)
        .fillColor(colors.primary)
        .font('Helvetica-Bold')
-       .text(text, 50, yPos);
+       .text(text, leftMargin, yPos);
     
-    doc.moveTo(50, yPos + 25).lineTo(545, yPos + 25).strokeColor(colors.border).stroke();
+    doc.moveTo(leftMargin, yPos + 25).lineTo(pageWidth - rightMargin, yPos + 25).strokeColor(colors.border).stroke();
     yPos += 40;
     return yPos;
   };
@@ -671,46 +686,57 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
         const questionId = key.split('-')[1];
         if (!questionId) return;
         
-        totalPoints += 2;
+        const question = task.questions?.find((q: any) => 
+          q && (q._id?.toString() === questionId || q.id?.toString() === questionId)
+        );
+        
+        // Skip if we can't find the question
+        if (!question) return;
+        
+        // Get the weight and max score from the question if available
+        const weight = question.weight || 1;
+        const maxScore = question.scoring?.max || 2;
+        
+        // Skip N/A responses in scoring
+        if (value === 'not_applicable' || value === 'na' || value === 'N/A') {
+          return;
+        }
+        
+        totalPoints += maxScore * weight;
         
         switch(value) {
           case 'full_compliance':
           case 'yes':
-            earnedPoints += 2;
+          case 'Yes':
+            earnedPoints += maxScore * weight;
             break;
           case 'partial_compliance':
-            earnedPoints += 1;
-            break;
-          case 'not_applicable':
-          case 'na':
-            totalPoints -= 2;
+            earnedPoints += (maxScore / 2) * weight;
             break;
         }
       });
     }
     
     if (task.progress) {
-      task.progress.forEach((item) => {
+      task.progress.forEach((item: any) => {
         if (!item || !item.subLevelId) return;
         
-        const isMandatory = true;
+        // Skip N/A items in scoring
+        if (item.status === 'not_applicable') {
+          return;
+        }
         
-        if (isMandatory) {
-          totalPoints += 2;
-          
-          switch (item.status) {
-            case 'completed':
-            case 'full_compliance':
-              earnedPoints += 2;
-              break;
-            case 'in_progress':
-            case 'partial_compliance':
-              earnedPoints += 1;
-              break;
-            case 'not_applicable':
-              totalPoints -= 2;
-              break;
-          }
+        totalPoints += 2; // Each checkpoint is worth 2 points
+        
+        switch (item.status) {
+          case 'completed':
+          case 'full_compliance':
+            earnedPoints += 2;
+            break;
+          case 'in_progress':
+          case 'partial_compliance':
+            earnedPoints += 1;
+            break;
         }
       });
     }
@@ -744,130 +770,153 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
   try {
     const logoPath = path.join(process.cwd(), 'public/logo.png');
     if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 50, yPos, { width: 120 });
-      yPos += 130;
-    } else {
-      // If no logo, draw a placeholder header
-      doc.rect(50, yPos, 495, 60)
-         .fillAndStroke(colors.background, colors.border);
+      doc.image(logoPath, leftMargin, yPos, { width: 120 });
       
-      doc.fontSize(20)
+      // Add report title next to logo
+      doc.fontSize(22)
          .fillColor(colors.primary)
          .font('Helvetica-Bold')
-         .text('Inspection Report', 50, yPos + 10, { align: 'center', width: 495 });
+         .text('Inspection Report', leftMargin + 140, yPos + 15);
+      
+      yPos += 100;
+    } else {
+      // If no logo, draw a placeholder header
+      doc.rect(leftMargin, yPos, contentWidth, 60)
+         .fillAndStroke(colors.background, colors.border);
+      
+      doc.fontSize(22)
+         .fillColor(colors.primary)
+         .font('Helvetica-Bold')
+         .text('Inspection Report', leftMargin, yPos + 15, { align: 'center', width: contentWidth });
       
       yPos += 80;
     }
   } catch (err) {
     // If logo fails to load, use text header
-    doc.rect(50, yPos, 495, 60)
+    doc.rect(leftMargin, yPos, contentWidth, 60)
        .fillAndStroke(colors.background, colors.border);
     
-    doc.fontSize(20)
+    doc.fontSize(22)
        .fillColor(colors.primary)
        .font('Helvetica-Bold')
-       .text('Inspection Report', 50, yPos + 10, { align: 'center', width: 495 });
+       .text('Inspection Report', leftMargin, yPos + 15, { align: 'center', width: contentWidth });
     
     yPos += 80;
   }
   
-const score : any= calculateOverallScore();
-doc.rect(50, yPos, 495, 40)
-   .fillAndStroke('#f8f9fa', '#dee2e6');
-
-   doc.fillColor(colors.primary)
-   .fontSize(14)
-   .font('Helvetica-Bold')
-   .text(`Score ${score.achieved} / ${score.total} (${score.percentage}%)`, 70, yPos + 12);
-  
-  doc.fillColor(colors.text)
-     .fontSize(10)
-     .font('Helvetica')
-     .text(`Flagged items: ${task.flaggedItems?.length || 0}`, 350, yPos + 14);
-  
-  doc.fillColor(colors.text)
-     .fontSize(10)
-     .font('Helvetica')
-     .text(`Actions: 0`, 450, yPos + 14);
-  
-  yPos += 60;
-  
-  // Asset selection section
-  ensureSpace(120);
-  doc.rect(50, yPos, 495, 100)
-     .fillAndStroke('#f1f3f5', '#dee2e6');
-  
-  doc.fontSize(14)
-     .fillColor(colors.text)
-     .font('Helvetica-Bold')
-     .text('Asset selection', 70, yPos + 10);
-  
-  yPos += 40;
-  
-  doc.fontSize(12)
-     .fillColor(colors.text)
-     .font('Helvetica')
-     .text('Before proceeding, please select the asset you are inspecting. This will help ensure accurate reporting.', 70, yPos);
-  
-  yPos += 30;
-  
-  doc.fontSize(12)
+  // Draw inspection title
+  doc.fontSize(18)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text('Please choose the asset:', 70, yPos);
+     .text(task.title || 'Inspection Task', leftMargin, yPos);
+     
+  yPos += 30;
   
-  const asset = task.asset || {};
-  const assetName = typeof asset === 'object' 
-    ? (asset.displayName || asset.name || 'N/A') 
-    : 'Asset ID: ' + asset;
+  // Draw task overview
+  const score = calculateOverallScore();
   
-  doc.rect(350, yPos - 3, 180, 20)
-     .stroke('#dee2e6');
+  // Draw score summary box
+  doc.rect(leftMargin, yPos, contentWidth, 60)
+     .fillAndStroke('#f1f5f9', '#e2e8f0');
   
-  doc.fontSize(10)
-     .fillColor(colors.text)
-     .font('Helvetica')
-     .text(assetName, 355, yPos);
-  
-  yPos += 40;
-  
-  // Inspection Data section
-  ensureSpace(300);
-  doc.rect(50, yPos, 495, 250)
-     .fillAndStroke('#f1f3f5', '#dee2e6');
-  
-  doc.fontSize(14)
-     .fillColor(colors.text)
+  doc.fillColor(colors.primary)
+     .fontSize(14)
      .font('Helvetica-Bold')
-     .text('Inspection Data', 70, yPos + 10);
+     .text('Compliance Score:', leftMargin + 15, yPos + 10);
   
-  yPos += 40;
+  doc.fillColor(colors.text)
+     .fontSize(24)
+     .font('Helvetica-Bold')
+     .text(`${score.percentage}%`, leftMargin + 180, yPos + 10);
+     
+  doc.fillColor(colors.text)
+     .fontSize(12)
+     .font('Helvetica')
+     .text(`${score.achieved} of ${score.total} points`, leftMargin + 180, yPos + 35);
+
+  // Add inspection status on right side
+  doc.fillColor(colors.primary)
+     .fontSize(14)
+     .font('Helvetica-Bold')
+     .text('Status:', leftMargin + 300, yPos + 10);
+
+  // Draw status badge
+  drawStatusBadge(task.status || 'pending', leftMargin + 350, yPos + 8);
   
-  // Process inspection levels and their questions together
-  if (task.inspectionLevel && task.inspectionLevel.subLevels) {
-    ensureSpace(50);
-    
-    doc.rect(50, yPos, 495, 30)
-       .fillAndStroke('#f1f3f5', '#dee2e6');
-    
-    doc.fontSize(14)
+  yPos += 80;
+  
+  // Task information
+  ensureSpace(100);
+  drawSectionHeader('Task Information');
+  
+  const taskInfoTable = [
+    ['Task ID:', task._id ? task._id.toString() : 'N/A'],
+    ['Assigned To:', task.assignedTo && task.assignedTo.length > 0 
+                   ? (task.assignedTo[0].name || 'Unnamed User') 
+                   : 'Unassigned'],
+    ['Created On:', task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'N/A'],
+    ['Priority:', task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'N/A'],
+    ['Deadline:', task.deadline ? new Date(task.deadline).toLocaleDateString() : 'N/A'],
+    ['Completion:', `${task.overallProgress || 0}%`]
+  ];
+  
+  // Draw info table
+  let tableY = yPos;
+  const colWidth1 = 120;
+  const colWidth2 = contentWidth - colWidth1;
+  
+  taskInfoTable.forEach(([label, value]) => {
+    doc.fontSize(10)
+       .fillColor(colors.lightText)
+       .font('Helvetica')
+       .text(label, leftMargin, tableY);
+       
+    doc.fontSize(10)
        .fillColor(colors.text)
        .font('Helvetica-Bold')
-       .text('Inspection Levels and Questions', 70, yPos + 8);
+       .text(value, leftMargin + colWidth1, tableY);
     
-    yPos += 40;
+    tableY += 20;
+  });
+  
+  yPos = tableY + 20;
+  
+  // Add description if available
+  if (task.description) {
+    ensureSpace(80);
+    doc.fontSize(10)
+       .fillColor(colors.lightText)
+       .font('Helvetica')
+       .text('Description:', leftMargin, yPos);
+       
+    yPos += 15;
     
-    // Helper function to process sublevels recursively
-    const processSubLevels = (subLevels: any[], level = 0, parentPath = '') => {
-      if (!subLevels || !Array.isArray(subLevels)) return;
+    doc.fontSize(10)
+       .fillColor(colors.text)
+       .font('Helvetica')
+       .text(task.description, leftMargin, yPos, { width: contentWidth });
+    
+    const textHeight = doc.heightOfString(task.description, { width: contentWidth });
+    yPos += textHeight + 20;
+  }
+  
+  // Inspection Data section
+  ensureSpace(100);
+  drawSectionHeader('Inspection Results');
+  
+  // Process sublevels and questions
+  if (task.inspectionLevel && task.inspectionLevel.subLevels) {
+    ensureSpace(50);
+  
+    // Helper function to process sublevels recursively with better format
+    const processSubLevelsForPDF = (subLevels: any[], level = 0, maxDepth = 10): void => {
+      if (!subLevels || !Array.isArray(subLevels) || level > maxDepth) return;
       
       for (const subLevel of subLevels) {
         if (!subLevel) continue;
         
         // Ensure space for the sublevel and its details
         ensureSpace(80);
-        
-        const path = parentPath ? `${parentPath} > ${subLevel.name}` : subLevel.name;
         
         // Get progress information
         const progress = task.progress?.find((p: any) => 
@@ -878,158 +927,61 @@ doc.rect(50, yPos, 495, 40)
         );
         
         const status = progress?.status || 'pending';
-        const statusText = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
         
-        // Draw level header
-        const indent = level * 10;
-        doc.rect(50 + indent, yPos, 495 - indent, 25)
-           .fillAndStroke('#e9ecef', '#dee2e6');
+        // Indent based on level
+        const indent = level * 15;
         
-        doc.fontSize(10 + (2 / (level + 1)))
+        // Draw level header with gradient background
+        const levelBoxWidth = contentWidth - indent;
+        doc.rect(leftMargin + indent, yPos, levelBoxWidth, 30)
+           .fillAndStroke(level === 0 ? '#e0e7ff' : '#f1f5f9', '#e2e8f0');
+        
+        // Level title and status on the same line
+        doc.fontSize(12 - (level * 0.5))
            .fillColor(colors.primary)
            .font('Helvetica-Bold')
-           .text(subLevel.name, 60 + indent, yPos + 7, { width: 300 });
+           .text(subLevel.name || 'Unnamed Level', leftMargin + indent + 10, yPos + 10, 
+                 { width: levelBoxWidth - 120, continued: true });
         
-        // Draw status badge
-        let statusColor;
-        switch (status) {
-          case 'completed':
-          case 'full_compliance':
-            statusColor = '#4caf50';
-            break;
-          case 'in_progress':
-          case 'partial_compliance':
-            statusColor = '#ff9800';
-            break;
-          case 'not_applicable':
-            statusColor = '#9e9e9e';
-            break;
-          case 'failed':
-          case 'non_compliance':
-            statusColor = '#f44336';
-            break;
-          default:
-            statusColor = '#9e9e9e';
-        }
+        // Add status badge at the right side of the header
+        const statusX = pageWidth - rightMargin - 110;
+        drawStatusBadge(status, statusX, yPos + 5);
         
-        doc.rect(380, yPos + 5, 100, 15)
-           .fillAndStroke(statusColor, statusColor);
+        yPos += 40;
         
-        doc.fontSize(8)
-           .fillColor('white')
-           .font('Helvetica-Bold')
-           .text(statusText, 385, yPos + 7, { width: 90, align: 'center' });
-        
-        yPos += 30;
-        
-        // Draw description
-        if (subLevel.description) {
+        // Add description if available
+        if (subLevel.description && subLevel.description !== 'No description provided') {
+          ensureSpace(40);
           doc.fontSize(9)
              .fillColor(colors.text)
              .font('Helvetica')
-             .text(subLevel.description, 60 + indent, yPos, { width: 485 - indent });
+             .text(subLevel.description, leftMargin + indent + 10, yPos, 
+                   { width: levelBoxWidth - 20 });
           
-          yPos += 20;
+          const descHeight = doc.heightOfString(subLevel.description, { width: levelBoxWidth - 20 });
+          yPos += descHeight + 10;
         }
         
-        // Draw notes if available
+        // Add notes if available
         if (progress && progress.notes) {
-          ensureSpace(30);
+          ensureSpace(40);
           doc.fontSize(9)
              .fillColor(colors.primary)
              .font('Helvetica-Bold')
-             .text('Notes:', 60 + indent, yPos);
+             .text('Inspector Notes:', leftMargin + indent + 10, yPos);
           
           yPos += 15;
+          
+          doc.rect(leftMargin + indent + 10, yPos, levelBoxWidth - 20, 50)
+             .fillAndStroke('#ffffff', '#e2e8f0');
           
           doc.fontSize(9)
              .fillColor(colors.text)
              .font('Helvetica')
-             .text(progress.notes, 60 + indent, yPos, { width: 485 - indent });
+             .text(progress.notes, leftMargin + indent + 15, yPos + 5, 
+                   { width: levelBoxWidth - 30 });
           
-          yPos += 20;
-        }
-
-        // Find associated questions
-        if (task.questions && Array.isArray(task.questions)) {
-          const levelQuestions = task.questions.filter((q: any) => 
-            q.levelId && (q.levelId.toString() === subLevel._id.toString() || 
-            (typeof q.levelId === 'object' && q.levelId._id && q.levelId._id.toString() === subLevel._id.toString()))
-          );
-          
-          if (levelQuestions.length > 0) {
-            ensureSpace(20);
-            doc.fontSize(9)
-               .fillColor(colors.primary)
-               .font('Helvetica-Bold')
-               .text('Questions:', 60 + indent, yPos);
-            
-            yPos += 15;
-            
-            for (const question of levelQuestions) {
-              ensureSpace(50);
-              
-              // Find question response
-              const questionId = question._id || question.id;
-              const responseKey = Object.keys(task.questionnaireResponses || {}).find(key => 
-                key.includes(questionId) || key.endsWith(questionId)
-              );
-              
-              const response = responseKey ? task.questionnaireResponses[responseKey] : null;
-              
-              // Draw question text
-              doc.fontSize(9)
-                 .fillColor(colors.text)
-                 .font('Helvetica-Bold')
-                 .text(`- ${question.text}`, 70 + indent, yPos, { width: 475 - indent });
-              
-              yPos += 15;
-              
-              // Draw response if available
-              if (response) {
-                let responseText;
-                let responseColor;
-                
-                switch (response) {
-                  case 'yes':
-                  case 'full_compliance':
-                    responseText = 'Yes / Full Compliance';
-                    responseColor = '#4caf50';
-                    break;
-                  case 'no':
-                  case 'non_compliance':
-                    responseText = 'No / Non-Compliance';
-                    responseColor = '#f44336';
-                    break;
-                  case 'partial_compliance':
-                    responseText = 'Partial Compliance';
-                    responseColor = '#ff9800';
-                    break;
-                  case 'not_applicable':
-                  case 'na':
-                    responseText = 'Not Applicable';
-                    responseColor = '#9e9e9e';
-                    break;
-                  default:
-                    responseText = response;
-                    responseColor = 'var(--color-navy)';
-                }
-                
-                doc.rect(80 + indent, yPos, 150, 15)
-                   .fillAndStroke(responseColor, responseColor);
-                
-                doc.fontSize(8)
-                   .fillColor('white')
-                   .font('Helvetica-Bold')
-                   .text(responseText, 85 + indent, yPos + 3, { width: 140, align: 'center' });
-                
-                yPos += 20;
-              }
-              
-              // Add some space between questions
-              yPos += 5;
-            }
-          }
+          yPos += 60;
         }
         
         // Process photos
@@ -1038,15 +990,15 @@ doc.rect(50, yPos, 495, 40)
           doc.fontSize(9)
              .fillColor(colors.primary)
              .font('Helvetica-Bold')
-             .text('Photos:', 60 + indent, yPos);
+             .text('Photos:', leftMargin + indent + 10, yPos);
           
           yPos += 15;
           
-          // Process photo count
+          // Just show count for now - actual photos would need to be fetched and embedded
           doc.fontSize(9)
              .fillColor(colors.text)
              .font('Helvetica')
-             .text(`${progress.photos.length} photo(s) attached`, 60 + indent, yPos);
+             .text(`${progress.photos.length} photo(s) attached`, leftMargin + indent + 10, yPos);
           
           yPos += 20;
         }
@@ -1054,7 +1006,7 @@ doc.rect(50, yPos, 495, 40)
         // Process nested sublevels
         if (subLevel.subLevels && subLevel.subLevels.length > 0) {
           ensureSpace(10);
-          processSubLevels(subLevel.subLevels, level + 1, path);
+          processSubLevelsForPDF(subLevel.subLevels, level + 1, maxDepth);
         }
         
         // Add some extra space after this level
@@ -1063,149 +1015,343 @@ doc.rect(50, yPos, 495, 40)
     };
     
     // Start processing top-level sublevels
-    processSubLevels(task.inspectionLevel.subLevels);
+    processSubLevelsForPDF(task.inspectionLevel.subLevels);
   }
   
-  // Process questionnaire for questions not linked to specific levels
+  // Questionnaire results section
   if (task.questions && task.questions.length > 0 && task.questionnaireResponses) {
-    const unlinkedQuestions = task.questions.filter((q: any) => !q.levelId);
+    ensureSpace(50);
+    drawSectionHeader('Questionnaire Results');
     
-    if (unlinkedQuestions.length > 0) {
-      ensureSpace(50);
+    // Group questions by category
+    const categories: Record<string, any[]> = {};
+    
+    task.questions.forEach((question: any) => {
+      if (!question) return;
       
-      doc.rect(50, yPos, 495, 30)
-         .fillAndStroke('#f1f3f5', '#dee2e6');
+      const category = question.category || 'General';
       
-      doc.fontSize(14)
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      
+      // Find response
+      const questionId = question._id || question.id;
+      const responseKey = Object.keys(task.questionnaireResponses || {}).find(key => 
+        key.includes(questionId) || key.endsWith(questionId)
+      );
+      
+      const response = responseKey ? task.questionnaireResponses[responseKey] : null;
+      const commentKey = `c-${questionId}`;
+      const comment = task.questionnaireResponses[commentKey] || '';
+      
+      categories[category].push({
+        id: questionId,
+        text: question.text || 'Question',
+        response,
+        comment,
+        mandatory: question.mandatory !== false
+      });
+    });
+    
+    // Process each category
+    for (const [category, questions] of Object.entries(categories)) {
+      ensureSpace(40);
+      
+      // Category header
+      doc.rect(leftMargin, yPos, contentWidth, 25)
+         .fillAndStroke('#e0e7ff', '#c7d2fe');
+         
+      doc.fontSize(12)
+         .fillColor(colors.primary)
+         .font('Helvetica-Bold')
+         .text(category, leftMargin + 10, yPos + 7);
+      
+      yPos += 35;
+      
+      // Questions table headers
+      const tableHeaderY = yPos;
+      const questionColWidth = contentWidth * 0.6;
+      const responseColWidth = contentWidth * 0.4;
+      
+      doc.rect(leftMargin, tableHeaderY, questionColWidth, 20)
+         .rect(leftMargin + questionColWidth, tableHeaderY, responseColWidth, 20)
+         .fillAndStroke('#f1f5f9', '#e2e8f0');
+      
+      doc.fontSize(10)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text('Additional Questionnaire Responses', 70, yPos + 8);
+         .text('Question', leftMargin + 10, tableHeaderY + 5)
+         .text('Response', leftMargin + questionColWidth + 10, tableHeaderY + 5);
       
-      yPos += 40;
+      yPos += 25;
       
-      // Group questions by category
-      const categories: Record<string, any[]> = {};
-      
-      unlinkedQuestions.forEach((question: any) => {
-        const category = question.category || 'General';
+      // Questions and responses
+      questions.forEach((question, index) => {
+        ensureSpace(40);
         
-        if (!categories[category]) {
-          categories[category] = [];
-        }
+        const rowBgColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const rowY = yPos;
         
-        // Find response
-        const questionId = question._id || question.id;
-        const responseKey = Object.keys(task.questionnaireResponses || {}).find(key => 
-          key.includes(questionId) || key.endsWith(questionId)
-        );
-        
-        const response = responseKey ? task.questionnaireResponses[responseKey] : null;
-        const commentKey = `c-${questionId}`;
-        const comment = task.questionnaireResponses[commentKey] || '';
-        
-        categories[category].push({
-          id: questionId,
-          text: question.text || 'Question',
-          response,
-          comment,
-          mandatory: question.mandatory !== false
+        // Calculate required height for question text
+        const questionTextHeight = doc.heightOfString(question.text, { 
+          width: questionColWidth - 20,
+          align: 'left'
         });
-      });
-      
-      // Now process each category
-      for (const [category, questions] of Object.entries(categories)) {
-        ensureSpace(30);
         
-        doc.fontSize(12)
-           .fillColor(colors.primary)
-           .font('Helvetica-Bold')
-           .text(category, 70, yPos);
+        const rowHeight = Math.max(30, questionTextHeight + 15);
         
-        yPos += 20;
+        // Draw row background
+        doc.rect(leftMargin, rowY, questionColWidth, rowHeight)
+           .rect(leftMargin + questionColWidth, rowY, responseColWidth, rowHeight)
+           .fillAndStroke(rowBgColor, '#e2e8f0');
         
-        for (const question of questions) {
-          ensureSpace(40);
+        // Question text
+        doc.fontSize(9)
+           .fillColor(colors.text)
+           .font('Helvetica')
+           .text(question.text, leftMargin + 10, rowY + 7, {
+             width: questionColWidth - 20,
+             align: 'left'
+           });
+        
+        // Response 
+        if (question.response) {
+          let responseColor;
+          let responseText;
           
-          doc.fontSize(10)
-             .fillColor(colors.text)
-             .font('Helvetica')
-             .text(question.text, 70, yPos, { width: 475 });
-          
-          yPos += 20;
-          
-          // Response
-          let responseText = 'No response';
-          let responseColor = '#9e9e9e';
-          
-          if (question.response) {
-            switch (question.response) {
-              case 'yes':
-              case 'full_compliance':
-                responseText = 'Yes / Full Compliance';
-                responseColor = '#4caf50';
-                break;
-              case 'no':
-              case 'non_compliance':
-                responseText = 'No / Non-Compliance';
-                responseColor = '#f44336';
-                break;
-              case 'partial_compliance':
-                responseText = 'Partial Compliance';
-                responseColor = '#ff9800';
-                break;
-              case 'not_applicable':
-              case 'na':
-                responseText = 'Not Applicable';
-                responseColor = '#9e9e9e';
-                break;
-              default:
-                responseText = question.response;
-                responseColor = 'var(--color-navy)';
-            }
+          switch (question.response) {
+            case 'yes':
+            case 'Yes':
+            case 'full_compliance':
+            case 'Full Compliance':
+              responseColor = colors.green;
+              responseText = 'Yes / Full Compliance';
+              break;
+            case 'no':
+            case 'No':
+            case 'non_compliance':
+            case 'Non Compliance':
+              responseColor = colors.red;
+              responseText = 'No / Non-Compliance';
+              break;
+            case 'partial_compliance':
+            case 'Partial Compliance':
+              responseColor = colors.amber;
+              responseText = 'Partial Compliance';
+              break;
+            case 'not_applicable':
+            case 'Not Applicable':
+            case 'na':
+            case 'N/A':
+              responseColor = colors.gray;
+              responseText = 'Not Applicable';
+              break;
+            default:
+              responseColor = colors.primary;
+              responseText = question.response;
           }
           
-          doc.rect(70, yPos, 150, 15)
+          // Draw response badge
+          doc.roundedRect(leftMargin + questionColWidth + 10, rowY + 5, responseColWidth - 20, 20, 5)
              .fillAndStroke(responseColor, responseColor);
           
-          doc.fontSize(8)
+          doc.fontSize(9)
              .fillColor('white')
              .font('Helvetica-Bold')
-             .text(responseText, 75, yPos + 3, { width: 140, align: 'center' });
-          
-          yPos += 20;
-          
-          // Comment if available
-          if (question.comment) {
-            doc.fontSize(9)
-               .fillColor(colors.text)
-               .font('Helvetica-Oblique')
-               .text(`Comment: ${question.comment}`, 70, yPos, { width: 475 });
-            
-            yPos += 20;
-          }
-          
-          yPos += 5;
+             .text(responseText, leftMargin + questionColWidth + 15, rowY + 10, {
+               width: responseColWidth - 30,
+               align: 'center'
+             });
+        } else {
+          doc.fontSize(9)
+             .fillColor(colors.lightText)
+             .font('Helvetica-Oblique')
+             .text('No response', leftMargin + questionColWidth + 10, rowY + 10);
         }
         
-        yPos += 10;
-      }
+        yPos += rowHeight;
+        
+        // Add comment if available
+        if (question.comment) {
+          ensureSpace(30);
+          
+          doc.rect(leftMargin, yPos, contentWidth, 25)
+             .fillAndStroke('#f8fafc', '#e2e8f0');
+          
+          doc.fontSize(8)
+             .fillColor(colors.lightText)
+             .font('Helvetica-Bold')
+             .text('Comment:', leftMargin + 10, yPos + 5, { continued: true });
+          
+          doc.font('Helvetica')
+             .text(' ' + question.comment, { width: contentWidth - 70 });
+          
+          yPos += 30;
+        }
+      });
+      
+      yPos += 15;
     }
   }
-
-  // ... continue with the rest of the PDF generation (signatures, etc.)
+  
+  // Flagged items section
+  if (task.flaggedItems && task.flaggedItems.length > 0) {
+    ensureSpace(50);
+    drawSectionHeader('Flagged Items');
+    
+    // Flagged items table headers
+    const tableHeaderY = yPos;
+    const categoryColWidth = contentWidth * 0.25;
+    const itemColWidth = contentWidth * 0.35;
+    const statusColWidth = contentWidth * 0.15;
+    const notesColWidth = contentWidth * 0.25;
+    
+    doc.rect(leftMargin, tableHeaderY, categoryColWidth, 20)
+       .rect(leftMargin + categoryColWidth, tableHeaderY, itemColWidth, 20)
+       .rect(leftMargin + categoryColWidth + itemColWidth, tableHeaderY, statusColWidth, 20)
+       .rect(leftMargin + categoryColWidth + itemColWidth + statusColWidth, tableHeaderY, notesColWidth, 20)
+       .fillAndStroke(colors.primary, colors.primary);
+    
+    doc.fontSize(10)
+       .fillColor('white')
+       .font('Helvetica-Bold')
+       .text('Category', leftMargin + 10, tableHeaderY + 5)
+       .text('Item', leftMargin + categoryColWidth + 10, tableHeaderY + 5)
+       .text('Status', leftMargin + categoryColWidth + itemColWidth + 10, tableHeaderY + 5)
+       .text('Notes', leftMargin + categoryColWidth + itemColWidth + statusColWidth + 10, tableHeaderY + 5);
+    
+    yPos += 25;
+    
+    // Flagged items rows
+    task.flaggedItems.forEach((item: any, index: number) => {
+      if (!item) return;
+      
+      ensureSpace(40);
+      
+      const rowBgColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+      const rowY = yPos;
+      const rowHeight = 30;
+      
+      // Draw row background
+      doc.rect(leftMargin, rowY, categoryColWidth, rowHeight)
+         .rect(leftMargin + categoryColWidth, rowY, itemColWidth, rowHeight)
+         .rect(leftMargin + categoryColWidth + itemColWidth, rowY, statusColWidth, rowHeight)
+         .rect(leftMargin + categoryColWidth + itemColWidth + statusColWidth, rowY, notesColWidth, rowHeight)
+         .fillAndStroke(rowBgColor, '#e2e8f0');
+      
+      // Fill in data
+      doc.fontSize(9)
+         .fillColor(colors.text)
+         .font('Helvetica')
+         .text(item.category || 'N/A', leftMargin + 5, rowY + 10, { width: categoryColWidth - 10 })
+         .text(item.title || 'Untitled', leftMargin + categoryColWidth + 5, rowY + 10, { width: itemColWidth - 10 });
+      
+      // Status with color indicator
+      let statusColor;
+      switch (item.status) {
+        case 'full_compliance':
+        case 'Full Compliance':
+          statusColor = colors.green;
+          break;
+        case 'partial_compliance':
+        case 'Partial Compliance':
+          statusColor = colors.amber;
+          break;
+        case 'not_applicable':
+        case 'Not Applicable':
+          statusColor = colors.gray;
+          break;
+        default:
+          statusColor = colors.red;
+      }
+      
+      const statusX = leftMargin + categoryColWidth + itemColWidth + 5;
+      const statusY = rowY + 5;
+      const statusWidth = statusColWidth - 10;
+      
+      doc.roundedRect(statusX, statusY, statusWidth, rowHeight - 10, 3)
+         .fillAndStroke(statusColor, statusColor);
+      
+      doc.fontSize(8)
+         .fillColor('white')
+         .font('Helvetica-Bold')
+         .text(item.status || 'N/A', statusX + 5, statusY + 5, { width: statusWidth - 10, align: 'center' });
+      
+      // Notes
+      doc.fontSize(9)
+         .fillColor(colors.text)
+         .font('Helvetica')
+         .text(item.notes || '', leftMargin + categoryColWidth + itemColWidth + statusColWidth + 5, rowY + 10, 
+               { width: notesColWidth - 10 });
+      
+      yPos += rowHeight;
+    });
+    
+    yPos += 20;
+  }
+  
+  // Footer with signature area
+  ensureSpace(100);
+  drawSectionHeader('Sign-off');
+  
+  // Inspector signature
+  doc.fontSize(10)
+     .fillColor(colors.text)
+     .font('Helvetica-Bold')
+     .text('Inspector Signature:', leftMargin, yPos);
+  
+  yPos += 20;
+  
+  doc.rect(leftMargin, yPos, contentWidth * 0.45, 40)
+     .stroke('#e2e8f0');
+  
+  // Person in charge signature
+  doc.fontSize(10)
+     .fillColor(colors.text)
+     .font('Helvetica-Bold')
+     .text('Person in Charge Signature:', leftMargin + contentWidth * 0.55, yPos - 20);
+  
+  doc.rect(leftMargin + contentWidth * 0.55, yPos, contentWidth * 0.45, 40)
+     .stroke('#e2e8f0');
+  
+  yPos += 50;
+  
+  // Date line
+  doc.fontSize(10)
+     .fillColor(colors.text)
+     .font('Helvetica-Bold')
+     .text('Date:', leftMargin, yPos);
+  
+  doc.moveTo(leftMargin + 35, yPos + 12)
+     .lineTo(leftMargin + 150, yPos + 12)
+     .stroke('#e2e8f0');
   
   // Add page numbers
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
     
-    doc.fontSize(10)
+    // Add time generated on bottom left
+    doc.fontSize(8)
        .fillColor(colors.lightText)
+       .font('Helvetica')
        .text(
-         `${i + 1}/${range.count}`,
-         50,
-         doc.page.height - 50,
-         { align: 'right', width: maxWidth }
+         `Generated on ${new Date().toLocaleString()}`,
+         leftMargin,
+         doc.page.height - 30,
+         { align: 'left', width: contentWidth / 2 }
+       );
+    
+    // Add page number on bottom right
+    doc.fontSize(8)
+       .fillColor(colors.lightText)
+       .font('Helvetica')
+       .text(
+         `Page ${i + 1} of ${range.count}`,
+         leftMargin + contentWidth / 2,
+         doc.page.height - 30,
+         { align: 'right', width: contentWidth / 2 }
        );
   }
 }
@@ -1263,17 +1409,10 @@ async function generateTaskExcelContent(workbook: ExcelJS.Workbook, task: any): 
           case 'yes':
             scoreValue = 2;
             break;
-          case 'partial_compliance': 
-          case 'Partial Compliance':
+          case 'partial_compliance':
             scoreValue = 1;
             break;
-          case 'non_compliance':
-          case 'Non Compliant':
-          case 'no':
-            scoreValue = 0;
-            break;
           case 'not_applicable':
-          case 'Not Applicable':
           case 'na':
             scoreValue = 0;
             maxScoreValue = 0; // Don't count in the total
@@ -1522,9 +1661,9 @@ async function generateTaskExcelContent(workbook: ExcelJS.Workbook, task: any): 
             fgColor: { 
               argb: item.status === 'full_compliance' || item.status === 'Full Compliance' ? '4CAF50' : 
                     item.status === 'partial_compliance' || item.status === 'Partial Compliance' ? 'FFC107' : 
-                    item.status === 'not_applicable' || item.status === 'Not Applicable' ? 'BDBDBD' : 'F44336' 
+                    item.status === 'not_applicable' || item.status === 'Not Applicable' ? 'BDBDBD' : 'F44336'
             }
-          }
+          };
         }
       }
     });
@@ -1560,6 +1699,9 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
   
   if (!task) return null;
   
+  // Convert mongoose document to plain object to avoid type issues
+  const taskData = task.toObject() as unknown as ITaskExtended;
+  
   const getAllSubLevelIds = (subLevels: any[]): string[] => {
     let ids: string[] = [];
     if (!subLevels || !Array.isArray(subLevels)) return ids;
@@ -1575,20 +1717,20 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     return ids;
   };
   
-  const allSubLevelIds = getAllSubLevelIds(task.inspectionLevel?.subLevels || []);
+  const allSubLevelIds = getAllSubLevelIds(taskData.inspectionLevel?.subLevels || []);
   
   let timeSpent = 0;
-  if (task.statusHistory && task.statusHistory.length > 0) {
-    const startTime = new Date(task.statusHistory[0].timestamp).getTime();
-    const endTime = task.status === 'completed' 
-      ? new Date(task.statusHistory[task.statusHistory.length - 1].timestamp).getTime()
+  if (taskData.statusHistory && taskData.statusHistory.length > 0) {
+    const startTime = new Date(taskData.statusHistory[0].timestamp).getTime();
+    const endTime = taskData.status === 'completed' 
+      ? new Date(taskData.statusHistory[taskData.statusHistory.length - 1].timestamp).getTime()
       : Date.now();
     timeSpent = (endTime - startTime) / (1000 * 60 * 60);
   }
 
   const subLevelTimeSpent: Record<string, string> = {};
-  if (task.progress && Array.isArray(task.progress)) {
-    task.progress.forEach((p: any) => {
+  if (taskData.progress && Array.isArray(taskData.progress)) {
+    taskData.progress.forEach((p: any) => {
       if (p && p.subLevelId) {
         if (p.timeSpent) {
           subLevelTimeSpent[p.subLevelId.toString()] = p.timeSpent.toFixed(1);
@@ -1602,7 +1744,7 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     });
   }
 
-  const userProgress = task.progress && Array.isArray(task.progress) ? task.progress.filter((p: any) => {
+  const userProgress = taskData.progress && Array.isArray(taskData.progress) ? taskData.progress.filter((p: any) => {
     if (!p || !p.subLevelId || !p.completedBy) return false;
     const completedById = typeof p.completedBy === 'object' ? 
       (p.completedBy._id ? p.completedBy._id.toString() : '') : 
@@ -1616,7 +1758,7 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     : 0;
 
   const flaggedItems: any[] = [];
-  if (task.progress && Array.isArray(task.progress)) {
+  if (taskData.progress && Array.isArray(taskData.progress)) {
     const findFlaggedSubLevels = (subLevels: any[], parentPath = ''): void => {
       if (!subLevels || !Array.isArray(subLevels)) return;
       
@@ -1624,7 +1766,7 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
         if (!subLevel || !subLevel._id) continue;
         
         const currentPath = parentPath ? `${parentPath} > ${subLevel.name || 'Unnamed'}` : (subLevel.name || 'Unnamed');
-        const progress:any = task.progress.find((p: any) => 
+        const progress:any = taskData.progress.find((p: any) => 
           p && p.subLevelId && subLevel._id && 
           p.subLevelId.toString() === subLevel._id.toString()
         );
@@ -1646,54 +1788,77 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
       }
     };
     
-    if (task.inspectionLevel && task.inspectionLevel.subLevels) {
-      findFlaggedSubLevels(task.inspectionLevel.subLevels);
+    if (taskData.inspectionLevel && taskData.inspectionLevel.subLevels) {
+      findFlaggedSubLevels(taskData.inspectionLevel.subLevels);
     }
   }
   
-  // Add questionnaire data from the inspection level instead of task
-  if (task.inspectionLevel && task.inspectionLevel.questionnaireResponses && task.inspectionLevel.questions) {
-    const inspectionLevel = task.inspectionLevel;
-    Object.entries(inspectionLevel.questionnaireResponses).forEach(([key, value]) => {
-      if (!key.includes('-')) return;
-      
-      const questionId = key.split('-')[1];
-      if (!questionId) return;
-      
-      const question = inspectionLevel.questions.find((q: any) => 
-        q && (
-          (q._id && q._id.toString() === questionId) || 
-          (q.id && q.id.toString() === questionId)
-        )
-      );
-      
-      if (question && (value === 'non_compliance' || value === 'Non Compliant' || value === 'no')) {
-        flaggedItems.push({
-          id: questionId,
-          category: 'Questionnaire',
-          title: question.text || 'Unnamed Question',
-          status: value,
-          notes: '',
-          path: `Questionnaire > ${question.text || 'Unnamed Question'}`
-        });
-      }
-    });
-  }
-
-  const taskObject = task.toObject();
+  // Process questionnaire data - use task's responses if available, otherwise fallback to inspection level
+  const questionnaireResponses = { ...(taskData.questionnaireResponses || {}) };
+  const questions = [...(taskData.questions || [])];
+  let questionnaireCompleted = taskData.questionnaireCompleted || false;
+  let questionnaireNotes = taskData.questionnaireNotes || '';
   
-  // Add questionnaire data from inspection level to maintain backward compatibility
-  if (task.inspectionLevel) {
-    // Use type assertion to avoid TypeScript errors
-    const taskObjectWithQuestionnaire = taskObject as any;
-    taskObjectWithQuestionnaire.questions = task.inspectionLevel.questions || [];
-    taskObjectWithQuestionnaire.questionnaireResponses = task.inspectionLevel.questionnaireResponses || {};
-    taskObjectWithQuestionnaire.questionnaireCompleted = task.inspectionLevel.questionnaireCompleted || false;
-    taskObjectWithQuestionnaire.questionnaireNotes = task.inspectionLevel.questionnaireNotes || '';
+  // Add questionnaire data from the inspection level if task data is insufficient
+  if (taskData.inspectionLevel) {
+    // If task doesn't have questions, use inspection level questions
+    if (!questions.length && taskData.inspectionLevel.questions && taskData.inspectionLevel.questions.length) {
+      questions.push(...taskData.inspectionLevel.questions);
+    }
+    
+    // Merge questionnaire responses (task responses take precedence)
+    if (taskData.inspectionLevel.questionnaireResponses) {
+      Object.entries(taskData.inspectionLevel.questionnaireResponses).forEach(([key, value]) => {
+        if (!questionnaireResponses[key]) {
+          questionnaireResponses[key] = value;
+        }
+      });
+    }
+    
+    // Use inspection level completion status if task status is not set
+    if (!taskData.questionnaireCompleted && taskData.inspectionLevel.questionnaireCompleted) {
+      questionnaireCompleted = taskData.inspectionLevel.questionnaireCompleted;
+    }
+    
+    // Use inspection level notes if task notes are not set
+    if (!questionnaireNotes && taskData.inspectionLevel.questionnaireNotes) {
+      questionnaireNotes = taskData.inspectionLevel.questionnaireNotes;
+    }
   }
+  
+  // Add flagged questionnaire items
+  Object.entries(questionnaireResponses).forEach(([key, value]) => {
+    if (!key.includes('-')) return;
+    
+    const questionId = key.split('-')[1];
+    if (!questionId) return;
+    
+    const question = questions.find((q: any) => 
+      q && (
+        (q._id && q._id.toString() === questionId) || 
+        (q.id && q.id.toString() === questionId)
+      )
+    );
+    
+    if (question && (value === 'non_compliance' || value === 'Non Compliant' || value === 'no' || value === 'No')) {
+      flaggedItems.push({
+        id: questionId,
+        category: 'Questionnaire',
+        title: question.text || 'Unnamed Question',
+        status: value,
+        notes: '',
+        path: `Questionnaire > ${question.text || 'Unnamed Question'}`
+      });
+    }
+  });
 
-  const taskWithMetrics = {
-    ...taskObject,
+  // Update the task object with the processed questionnaire data
+  const enhancedTask = {
+    ...taskData,
+    questions,
+    questionnaireResponses,
+    questionnaireCompleted,
+    questionnaireNotes,
     taskMetrics: {
       timeSpent: Math.round(timeSpent * 10) / 10,
       completionRate: Math.round(userCompletionRate),
@@ -1704,5 +1869,5 @@ async function getPopulatedTask(taskId: string, userId: any): Promise<any> {
     flaggedItems
   };
 
-  return taskWithMetrics;
+  return enhancedTask;
 }
