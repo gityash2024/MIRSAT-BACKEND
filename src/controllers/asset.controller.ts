@@ -13,6 +13,7 @@ export const createAsset = catchAsync(async (req: Request, res: Response, next: 
     return next(new ApiError('Asset with this ID already exists', 400));
   }
 
+  
   const asset = await Asset.create({
     uniqueId,
     type,
