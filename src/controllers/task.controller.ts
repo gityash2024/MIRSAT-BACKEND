@@ -23,7 +23,7 @@ export const deleteTask = catchAsync(async (req: Request, res: Response, next: N
 });
 
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel, asset } = req.body;
+  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel, asset, preInspectionQuestions } = req.body;
 
   const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
   if (users.length !== assignedTo.length) {
@@ -70,6 +70,7 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
     asset,  // Add the asset field
     progress: progressEntries,
     attachments,
+    preInspectionQuestions, // Add pre-inspection questions
     statusHistory: [{
       status: 'pending',
       changedBy: req.user._id,
@@ -194,7 +195,8 @@ export const updateTask = catchAsync(async (req: Request, res: Response, next: N
     deadline, 
     location, 
     status,
-    asset
+    asset,
+    preInspectionQuestions
   } = req.body;
 
   const task = await Task.findById(req.params.id);
@@ -257,7 +259,8 @@ export const updateTask = catchAsync(async (req: Request, res: Response, next: N
         deadline,
         location,
         status,
-        asset
+        asset,
+        preInspectionQuestions
       },
       $push: {
         statusHistory: {

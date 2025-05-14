@@ -16,6 +16,13 @@ export interface ITaskProgress {
   };
 }
 
+export interface IQuestion {
+  text: string;
+  type: 'text' | 'number' | 'boolean' | 'multiple-choice' | 'checkbox' | 'date' | 'yesno' | 'select' | 'compliance';
+  options?: string[];
+  required: boolean;
+}
+
 export interface ITask extends Document {
   title: string;
   description: string;
@@ -29,6 +36,7 @@ export interface ITask extends Document {
   inspectionLevel: any;
   progress: ITaskProgress[];
   overallProgress: number;
+  preInspectionQuestions?: IQuestion[];
   attachments: {
     url: string;
     filename: string;
@@ -85,6 +93,28 @@ const taskProgressSchema = new Schema<ITaskProgress>({
   }
 });
 
+const questionSchema = new Schema<IQuestion>({
+  text: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ['text', 'number', 'boolean', 'multiple-choice', 'checkbox', 'date', 'yesno', 'select', 'compliance'],
+    default: 'text',
+  },
+  options: {
+    type: [String],
+    default: undefined,
+  },
+  required: {
+    type: Boolean,
+    default: true,
+  },
+});
+
 const taskSchema = new Schema<ITask>({
   title: {
     type: String,
@@ -136,6 +166,7 @@ const taskSchema = new Schema<ITask>({
     type: Number,
     default: 0,
   },
+  preInspectionQuestions: [questionSchema],
   attachments: [{
     url: String,
     filename: String,
