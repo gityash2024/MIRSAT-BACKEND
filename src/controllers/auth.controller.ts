@@ -8,6 +8,7 @@ import  ApiError from '../utils/ApiError';
 
 const generateToken = (id: any): string => {
   if (!process.env.JWT_SECRET) {
+    
     throw new Error('JWT_SECRET is not defined');
   }
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
