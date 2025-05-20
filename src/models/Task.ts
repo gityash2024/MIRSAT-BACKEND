@@ -102,7 +102,6 @@ const questionSchema = new Schema<IQuestion>({
   type: {
     type: String,
     required: true,
-    enum: ['text', 'number', 'boolean', 'multiple-choice', 'checkbox', 'date', 'yesno', 'select', 'compliance'],
     default: 'text',
   },
   options: {
