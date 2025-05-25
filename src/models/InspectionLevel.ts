@@ -121,7 +121,7 @@ export interface IInspectionLevel extends Document {
 
 // Define the question schema first
 const questionSchema = new Schema({
-  text: { type: String, required: true },
+  text: { type: String },
   description: { type: String, default: '' },
   answerType: String,
   type: String,
