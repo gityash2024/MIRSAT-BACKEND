@@ -744,7 +744,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
         }
         
         // If not found, try to find by checking if key includes or ends with questionId
-        if (!response) {
+        if (response === null) {
           const foundKey = Object.keys(task.questionnaireResponses || {}).find(key => 
             !key.startsWith('c-') && (key.includes(questionId) || key.endsWith(questionId))
           );
@@ -759,19 +759,57 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
         const maxPointsForQuestion = maxScore * weight;
         
         // Skip N/A questions from calculation
-        if (response === 'not_applicable' || response === 'na' || response === 'N/A') {
+        if (response === 'not_applicable' || response === 'na' || response === 'N/A' || response === 'Not applicable') {
           return;
         }
         
         totalMaximum += maxPointsForQuestion;
         
-        if (response) {
-          if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
-              response === 'Full Compliance' || response === 'Full compliance') {
-            totalEarned += maxPointsForQuestion;
-          } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
-                    response === 'Partial compliance') {
-            totalEarned += maxPointsForQuestion / 2;
+        if (response !== null && response !== undefined) {
+          // Get question type
+          const questionType = question.type || question.answerType;
+          
+          // Calculate earned points based on question type and response
+          if (questionType === 'compliance' || questionType === 'yesno') {
+            // For compliance or yes/no questions
+            if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
+                response === 'Full Compliance' || response === 'Full compliance') {
+              totalEarned += maxPointsForQuestion;
+            } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
+                      response === 'Partial compliance') {
+              totalEarned += maxPointsForQuestion / 2;
+            }
+            // Non-compliance responses get 0 points
+          } else if (questionType === 'checkbox' || questionType === 'multiple') {
+            // For checkbox/multiple questions
+            if (Array.isArray(response) && response.length > 0) {
+              totalEarned += maxPointsForQuestion;
+            }
+          } else if (questionType === 'file') {
+            // For file uploads, any valid response means full score
+            if (typeof response === 'string' && response.trim() !== '') {
+              totalEarned += maxPointsForQuestion;
+            }
+          } else if (questionType === 'text' || questionType === 'signature') {
+            // For text and signature inputs
+            if (typeof response === 'string' && response.trim() !== '') {
+              totalEarned += maxPointsForQuestion;
+            }
+          } else if (questionType === 'number') {
+            // For number inputs
+            if (response !== '' && !isNaN(response)) {
+              totalEarned += maxPointsForQuestion;
+            }
+          } else if (questionType === 'date') {
+            // For date inputs
+            if (response && typeof response === 'string' && response !== '') {
+              totalEarned += maxPointsForQuestion;
+            }
+          } else {
+            // For any other type, assume valid response means full score
+            if (response && (typeof response === 'string' ? response.trim() !== '' : true)) {
+              totalEarned += maxPointsForQuestion;
+            }
           }
         }
       });
@@ -1039,15 +1077,56 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
       let earnedPointsForQuestion = 0;
       let isNA = false;
       
-      if (response) {
-        if (response === 'not_applicable' || response === 'na' || response === 'N/A') {
+      if (response !== null && response !== undefined) {
+        // Handle N/A responses
+        if (response === 'not_applicable' || response === 'na' || response === 'N/A' || response === 'Not applicable') {
           isNA = true;
-        } else if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
-                 response === 'Full Compliance' || response === 'Full compliance') {
-          earnedPointsForQuestion = maxPointsForQuestion;
-        } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
-                  response === 'Partial compliance') {
-          earnedPointsForQuestion = maxPointsForQuestion / 2;
+        } else {
+          // Get question type
+          const questionType = question.type || question.answerType;
+          
+          // Calculate earned points based on question type and response
+          if (questionType === 'compliance' || questionType === 'yesno') {
+            // For compliance or yes/no questions
+            if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
+                response === 'Full Compliance' || response === 'Full compliance') {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
+                      response === 'Partial compliance') {
+              earnedPointsForQuestion = maxPointsForQuestion / 2;
+            }
+            // Non-compliance responses get 0 points
+          } else if (questionType === 'checkbox' || questionType === 'multiple') {
+            // For checkbox/multiple questions
+            if (Array.isArray(response) && response.length > 0) {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          } else if (questionType === 'file') {
+            // For file uploads, any valid response means full score
+            if (typeof response === 'string' && response.trim() !== '') {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          } else if (questionType === 'text' || questionType === 'signature') {
+            // For text and signature inputs
+            if (typeof response === 'string' && response.trim() !== '') {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          } else if (questionType === 'number') {
+            // For number inputs
+            if (response !== '' && !isNaN(response)) {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          } else if (questionType === 'date') {
+            // For date inputs
+            if (response && typeof response === 'string' && response !== '') {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          } else {
+            // For any other type, assume valid response means full score
+            if (response && (typeof response === 'string' ? response.trim() !== '' : true)) {
+              earnedPointsForQuestion = maxPointsForQuestion;
+            }
+          }
         }
       }
       
