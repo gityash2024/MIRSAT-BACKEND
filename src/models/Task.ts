@@ -69,6 +69,9 @@ export interface ITask extends Document {
     totalSubTasks: number;
     subLevelTimeSpent?: Record<string, number>;
   };
+  signature?: string;
+  signedBy?: Schema.Types.ObjectId;
+  signedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -213,6 +216,29 @@ const taskSchema = new Schema<ITask>({
   isActive: {
     type: Boolean,
     default: true,
+  },
+  taskMetrics: {
+    type: {
+      timeSpent: Number,
+      completionRate: Number,
+      subTasksCompleted: Number,
+      totalSubTasks: Number,
+      subLevelTimeSpent: {
+        type: Map,
+        of: Number
+      }
+    },
+    default: undefined
+  },
+  signature: {
+    type: String,
+  },
+  signedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  signedAt: {
+    type: Date,
   },
 },
 {

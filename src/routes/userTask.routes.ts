@@ -7,7 +7,8 @@ import {
   updateTaskQuestionnaire, 
   getTaskDetails, 
   startTask, 
-  exportTaskReport 
+  exportTaskReport,
+  saveTaskSignature
 } from '../controllers/UserTaskController';
 
 const router = Router();
@@ -35,6 +36,9 @@ router.post('/:taskId/progress', updateTaskProgress);
 
 // Update questionnaire responses for a task
 router.post('/:taskId/questionnaire', updateTaskQuestionnaire);
+
+// Save signature for a task
+router.post('/:taskId/signature', saveTaskSignature);
 
 // Export task report - support both PDF and Excel formats
 router.get('/:taskId/export', exportTaskReport);

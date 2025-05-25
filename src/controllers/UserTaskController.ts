@@ -65,6 +65,9 @@ interface ITask extends mongoose.Document {
   questionnaireNotes?: string;
   location?: string;
   attachments?: any[];
+  signature?: string;
+  signedBy?: mongoose.Types.ObjectId | any;
+  signedAt?: Date;
   toObject(): any;
 }
 
@@ -597,6 +600,43 @@ export const exportTaskReport = catchAsync(async (req: Request, res: Response) =
   }
   
   return undefined;
+});
+
+/**
+ * Save a signature for a task
+ * @route POST /api/v1/user-tasks/:taskId/signature
+ */
+export const saveTaskSignature = catchAsync(async (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const { signature } = req.body;
+  const userId = req.user?._id;
+
+  if (!signature) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Signature is required');
+  }
+
+  const task = await Task.findById(taskId);
+
+  if (!task) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
+  }
+
+  // Check if user is assigned to this task
+  if (!task.assignedTo.some(id => id.toString() === userId.toString())) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this task');
+  }
+
+  // Save the signature to the task
+  task.signature = signature;
+  task.signedBy = userId;
+  task.signedAt = new Date();
+
+  await task.save();
+
+  res.status(httpStatus.OK).json({
+    status: 'success',
+    data: task
+  });
 });
 
 async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promise<void> {
