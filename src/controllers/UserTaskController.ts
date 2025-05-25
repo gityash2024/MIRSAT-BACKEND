@@ -711,90 +711,79 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     return x + rectWidth + 10;
   };
 
-  const calculateOverallScore = (): { achieved: number, total: number, percentage: number } => {
-    if (!task) return { achieved: 0, total: 0, percentage: 0 };
+  const calculateScores = (task: any) => {
+    let totalEarned = 0;
+    let totalMaximum = 0;
     
-    let totalPoints = 0;
-    let earnedPoints = 0;
-    
-    if (task.questionnaireResponses) {
-      const responses = task.questionnaireResponses;
-      
-      Object.entries(responses).forEach(([key, value]) => {
-        if (!key.includes('-') || key.startsWith('c-')) return;
-        
-        const questionId = key.split('-')[1];
-        if (!questionId) return;
-        
-        const question = task.questions?.find((q: any) => 
-          q && (q._id?.toString() === questionId || q.id?.toString() === questionId)
-        );
-        
-        // Skip if we can't find the question
+    // Calculate scores based on questionnaire responses
+    if (task.questions && task.questions.length > 0 && task.questionnaireResponses) {
+      task.questions.forEach((question: any) => {
         if (!question) return;
         
-        // Get the weight and max score from the question if available
+        const questionId = question._id?.toString() || question.id?.toString();
+        if (!questionId) return;
+        
+        // Skip if NA or no weight
         const weight = question.weight || 1;
+        if (weight <= 0) return;
+        
+        // Find response - try different key formats
+        let response = null;
+        
+        const possibleKeys = [
+          `q-${questionId}`,
+          `question-${questionId}`,
+          questionId
+        ];
+        
+        for (const key of possibleKeys) {
+          if (task.questionnaireResponses[key] !== undefined) {
+            response = task.questionnaireResponses[key];
+            break;
+          }
+        }
+        
+        // If not found, try to find by checking if key includes or ends with questionId
+        if (!response) {
+          const foundKey = Object.keys(task.questionnaireResponses || {}).find(key => 
+            !key.startsWith('c-') && (key.includes(questionId) || key.endsWith(questionId))
+          );
+          
+          if (foundKey) {
+            response = task.questionnaireResponses[foundKey];
+          }
+        }
+        
+        // Calculate points based on response
         const maxScore = question.scoring?.max || 2;
+        const maxPointsForQuestion = maxScore * weight;
         
-        // Skip N/A responses in scoring
-        if (value === 'not_applicable' || value === 'na' || value === 'N/A') {
+        // Skip N/A questions from calculation
+        if (response === 'not_applicable' || response === 'na' || response === 'N/A') {
           return;
         }
         
-        totalPoints += maxScore * weight;
+        totalMaximum += maxPointsForQuestion;
         
-        switch(value) {
-          case 'full_compliance':
-          case 'yes':
-          case 'Yes':
-            earnedPoints += maxScore * weight;
-            break;
-          case 'partial_compliance':
-            earnedPoints += (maxScore / 2) * weight;
-            break;
+        if (response) {
+          if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
+              response === 'Full Compliance' || response === 'Full compliance') {
+            totalEarned += maxPointsForQuestion;
+          } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
+                    response === 'Partial compliance') {
+            totalEarned += maxPointsForQuestion / 2;
+          }
         }
       });
     }
     
-    if (task.progress) {
-      task.progress.forEach((item: any) => {
-        if (!item || !item.subLevelId) return;
-        
-        // Skip N/A items in scoring
-        if (item.status === 'not_applicable') {
-          return;
-        }
-        
-        totalPoints += 2; // Each checkpoint is worth 2 points
-        
-        switch (item.status) {
-          case 'completed':
-          case 'full_compliance':
-            earnedPoints += 2;
-            break;
-          case 'in_progress':
-          case 'partial_compliance':
-            earnedPoints += 1;
-            break;
-        }
-      });
-    }
-    
-    if (totalPoints === 0 && task.overallProgress !== undefined) {
-      return {
-        achieved: task.overallProgress,
-        total: 100,
-        percentage: task.overallProgress
-      };
-    }
-    
-    const percentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    // Calculate percentage
+    const progressPercentage = totalMaximum > 0 ? (totalEarned / totalMaximum) * 100 : 0;
     
     return {
-      achieved: earnedPoints,
-      total: totalPoints,
-      percentage
+      earned: totalEarned,
+      maximum: totalMaximum,
+      percentage: Math.round(progressPercentage)
     };
   };
   
@@ -852,38 +841,87 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
      
   yPos += 30;
   
-  // Draw task overview
-  const score = calculateOverallScore();
+  // Calculate scores and progress
+  const scores = calculateScores(task);
   
-  // Draw score summary box
-  doc.rect(leftMargin, yPos, contentWidth, 60)
+  // Determine if all questions are answered
+  const allQuestionsAnswered = task.questions && task.questions.length > 0 && 
+    task.questions.every((q: any) => {
+      if (!q) return true;
+      const qId = q._id?.toString() || q.id?.toString();
+      return Object.keys(task.questionnaireResponses || {}).some(key => 
+        !key.startsWith('c-') && (key.includes(qId) || key.endsWith(qId))
+      );
+    });
+  
+  // Determine if all questions are fully compliant
+  const allQuestionsFullyCompliant = scores.earned === scores.maximum && scores.maximum > 0;
+  
+  // Determine task status based on questionnaire completion
+  let taskStatus = 'pending';
+  if (allQuestionsFullyCompliant) {
+    taskStatus = 'completed';
+  } else if (allQuestionsAnswered) {
+    taskStatus = 'completed'; // Still completed even if not all full compliance
+  } else if (Object.keys(task.questionnaireResponses || {}).some(key => !key.startsWith('c-'))) {
+    taskStatus = 'in_progress';
+  }
+  
+  // Draw progress summary box with improved design
+  doc.rect(leftMargin, yPos, contentWidth, 80)
      .fillAndStroke('#f1f5f9', '#e2e8f0');
   
+  // Left section - Overall Progress
   doc.fillColor(colors.primary)
      .fontSize(14)
      .font('Helvetica-Bold')
-     .text('Compliance Score:', leftMargin + 15, yPos + 10);
+     .text('Overall Progress:', leftMargin + 15, yPos + 15);
   
+  // Create a progress bar
+  const progressBarWidth = 100;
+  const progressBarHeight = 10;
+  const progressBarX = leftMargin + 160;
+  const progressBarY = yPos + 18;
+  
+  // Background of progress bar
+  doc.rect(progressBarX, progressBarY, progressBarWidth, progressBarHeight)
+     .fillAndStroke('#e2e8f0', '#d1d5db');
+  
+  // Calculate progress percentage - either from scores or task's overall progress
+  const progressPercentage = allQuestionsAnswered ? 100 : scores.percentage;
+  
+  // Filled portion of progress bar
+  const filledWidth = (progressPercentage / 100) * progressBarWidth;
+  doc.rect(progressBarX, progressBarY, filledWidth, progressBarHeight)
+     .fill(progressPercentage === 100 ? colors.green : colors.primary);
+  
+  // Progress percentage
   doc.fillColor(colors.text)
-     .fontSize(24)
+     .fontSize(16)
      .font('Helvetica-Bold')
-     .text(`${score.percentage}%`, leftMargin + 180, yPos + 10);
-     
-  doc.fillColor(colors.text)
-     .fontSize(12)
-     .font('Helvetica')
-     .text(`${score.achieved} of ${score.total} points`, leftMargin + 180, yPos + 35);
-
-  // Add inspection status on right side
+     .text(`${progressPercentage}%`, progressBarX + progressBarWidth + 10, yPos + 15);
+  
+  // Right section - Task Status
   doc.fillColor(colors.primary)
      .fontSize(14)
      .font('Helvetica-Bold')
-     .text('Status:', leftMargin + 300, yPos + 10);
-
+     .text('Status:', leftMargin + 350, yPos + 15);
+  
   // Draw status badge
-  drawStatusBadge(task.status || 'pending', leftMargin + 350, yPos + 8);
+  drawStatusBadge(taskStatus, leftMargin + 400, yPos + 13);
   
-  yPos += 80;
+  // Bottom section - Score breakdown
+  doc.fillColor(colors.primary)
+     .fontSize(12)
+     .font('Helvetica-Bold')
+     .text('Score Details:', leftMargin + 15, yPos + 45);
+  
+  doc.fillColor(colors.text)
+     .fontSize(10)
+     .font('Helvetica')
+     .text(`${Math.round(scores.earned)} of ${Math.round(scores.maximum)} points`, leftMargin + 100, yPos + 47);
+  
+  yPos += 100;
   
   // Task information
   ensureSpace(100);
@@ -897,7 +935,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     ['Created On:', task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'N/A'],
     ['Priority:', task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'N/A'],
     ['Deadline:', task.deadline ? new Date(task.deadline).toLocaleDateString() : 'N/A'],
-    ['Completion:', `${task.overallProgress || 0}%`]
+    ['Location:', task.location || 'N/A']
   ];
   
   // Draw info table
@@ -940,124 +978,6 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
     yPos += textHeight + 20;
   }
   
-  // Inspection Data section
-  ensureSpace(100);
-  drawSectionHeader('Inspection Results');
-  
-  // Process sublevels and questions
-  if (task.inspectionLevel && task.inspectionLevel.subLevels) {
-    ensureSpace(50);
-  
-    // Helper function to process sublevels recursively with better format
-    const processSubLevelsForPDF = (subLevels: any[], level = 0, maxDepth = 10): void => {
-      if (!subLevels || !Array.isArray(subLevels) || level > maxDepth) return;
-      
-      for (const subLevel of subLevels) {
-        if (!subLevel) continue;
-        
-        // Ensure space for the sublevel and its details
-        ensureSpace(80);
-        
-        // Get progress information
-        const progress = task.progress?.find((p: any) => 
-          p.subLevelId && (
-            p.subLevelId.toString() === subLevel._id.toString() || 
-            (typeof p.subLevelId === 'object' && p.subLevelId._id && p.subLevelId._id.toString() === subLevel._id.toString())
-          )
-        );
-        
-        const status = progress?.status || 'pending';
-        
-        // Indent based on level
-        const indent = level * 15;
-        
-        // Draw level header with gradient background
-        const levelBoxWidth = contentWidth - indent;
-        doc.rect(leftMargin + indent, yPos, levelBoxWidth, 30)
-           .fillAndStroke(level === 0 ? '#e0e7ff' : '#f1f5f9', '#e2e8f0');
-        
-        // Level title and status on the same line
-        doc.fontSize(12 - (level * 0.5))
-           .fillColor(colors.primary)
-           .font('Helvetica-Bold')
-           .text(subLevel.name || 'Unnamed Level', leftMargin + indent + 10, yPos + 10, 
-                 { width: levelBoxWidth - 120, continued: true });
-        
-        // Add status badge at the right side of the header
-        const statusX = pageWidth - rightMargin - 110;
-        drawStatusBadge(status, statusX, yPos + 5);
-        
-        yPos += 40;
-        
-        // Add description if available
-        if (subLevel.description && subLevel.description !== 'No description provided') {
-          ensureSpace(40);
-          doc.fontSize(9)
-             .fillColor(colors.text)
-             .font('Helvetica')
-             .text(subLevel.description, leftMargin + indent + 10, yPos, 
-                   { width: levelBoxWidth - 20 });
-          
-          const descHeight = doc.heightOfString(subLevel.description, { width: levelBoxWidth - 20 });
-          yPos += descHeight + 10;
-        }
-        
-        // Add notes if available
-        if (progress && progress.notes) {
-          ensureSpace(40);
-          doc.fontSize(9)
-             .fillColor(colors.primary)
-             .font('Helvetica-Bold')
-             .text('Inspector Notes:', leftMargin + indent + 10, yPos);
-          
-          yPos += 15;
-          
-          doc.rect(leftMargin + indent + 10, yPos, levelBoxWidth - 20, 50)
-             .fillAndStroke('#ffffff', '#e2e8f0');
-          
-          doc.fontSize(9)
-             .fillColor(colors.text)
-             .font('Helvetica')
-             .text(progress.notes, leftMargin + indent + 15, yPos + 5, 
-                   { width: levelBoxWidth - 30 });
-          
-          yPos += 60;
-        }
-        
-        // Process photos
-        if (progress && progress.photos && progress.photos.length > 0) {
-          ensureSpace(30);
-          doc.fontSize(9)
-             .fillColor(colors.primary)
-             .font('Helvetica-Bold')
-             .text('Photos:', leftMargin + indent + 10, yPos);
-          
-          yPos += 15;
-          
-          // Just show count for now - actual photos would need to be fetched and embedded
-          doc.fontSize(9)
-             .fillColor(colors.text)
-             .font('Helvetica')
-             .text(`${progress.photos.length} photo(s) attached`, leftMargin + indent + 10, yPos);
-          
-          yPos += 20;
-        }
-        
-        // Process nested sublevels
-        if (subLevel.subLevels && subLevel.subLevels.length > 0) {
-          ensureSpace(10);
-          processSubLevelsForPDF(subLevel.subLevels, level + 1, maxDepth);
-        }
-        
-        // Add some extra space after this level
-        yPos += 10;
-      }
-    };
-    
-    // Start processing top-level sublevels
-    processSubLevelsForPDF(task.inspectionLevel.subLevels);
-  }
-  
   // Questionnaire results section
   if (task.questions && task.questions.length > 0 && task.questionnaireResponses) {
     ensureSpace(50);
@@ -1075,28 +995,82 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
         categories[category] = [];
       }
       
-      // Find response
-      const questionId = question._id || question.id;
-      const responseKey = Object.keys(task.questionnaireResponses || {}).find(key => 
-        key.includes(questionId) || key.endsWith(questionId)
-      );
+      const questionId = question._id?.toString() || question.id?.toString();
+      if (!questionId) return;
       
-      const response = responseKey ? task.questionnaireResponses[responseKey] : null;
+      // Find response - try to match exact key format
+      let response = null;
+      let responseKey = null;
+      
+      // Try different key formats
+      const possibleKeys = [
+        `q-${questionId}`,
+        `question-${questionId}`,
+        questionId
+      ];
+      
+      for (const key of possibleKeys) {
+        if (task.questionnaireResponses[key] !== undefined) {
+          responseKey = key;
+          response = task.questionnaireResponses[key];
+          break;
+        }
+      }
+      
+      // If not found, try to find by checking if key includes or ends with questionId
+      if (!responseKey) {
+        responseKey = Object.keys(task.questionnaireResponses || {}).find(key => 
+          !key.startsWith('c-') && (key.includes(questionId) || key.endsWith(questionId))
+        );
+        
+        if (responseKey) {
+          response = task.questionnaireResponses[responseKey];
+        }
+      }
+      
       const commentKey = `c-${questionId}`;
       const comment = task.questionnaireResponses[commentKey] || '';
       
+      // Calculate the earned and max score for this question directly
+      const weight = question.weight || 1;
+      const maxScore = question.scoring?.max || 2;
+      const maxPointsForQuestion = maxScore * weight;
+      
+      let earnedPointsForQuestion = 0;
+      let isNA = false;
+      
+      if (response) {
+        if (response === 'not_applicable' || response === 'na' || response === 'N/A') {
+          isNA = true;
+        } else if (response === 'full_compliance' || response === 'yes' || response === 'Yes' || 
+                 response === 'Full Compliance' || response === 'Full compliance') {
+          earnedPointsForQuestion = maxPointsForQuestion;
+        } else if (response === 'partial_compliance' || response === 'Partial Compliance' || 
+                  response === 'Partial compliance') {
+          earnedPointsForQuestion = maxPointsForQuestion / 2;
+        }
+      }
+      
+      // Get page and section info directly from the question object
+      const page = question.page || '';
+      const section = question.section || '';
+      
       categories[category].push({
         id: questionId,
-        text: question.text || 'Question',
+        text: question.text,
         response,
         comment,
-        mandatory: question.mandatory !== false
+        section,
+        page,
+        earned: earnedPointsForQuestion,
+        max: maxPointsForQuestion,
+        isNA
       });
     });
     
-    // Process each category
-    for (const [category, questions] of Object.entries(categories)) {
-      ensureSpace(40);
+    // Render each category
+    Object.entries(categories).forEach(([category, questions]) => {
+      ensureSpace(70);
       
       // Category header
       doc.rect(leftMargin, yPos, contentWidth, 25)
@@ -1111,24 +1085,27 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
       
       // Questions table headers
       const tableHeaderY = yPos;
-      const questionColWidth = contentWidth * 0.6;
-      const responseColWidth = contentWidth * 0.4;
+      const questionColWidth = contentWidth * 0.5;
+      const responseColWidth = contentWidth * 0.25;
+      const scoreColWidth = contentWidth * 0.25;
       
       doc.rect(leftMargin, tableHeaderY, questionColWidth, 20)
          .rect(leftMargin + questionColWidth, tableHeaderY, responseColWidth, 20)
+         .rect(leftMargin + questionColWidth + responseColWidth, tableHeaderY, scoreColWidth, 20)
          .fillAndStroke('#f1f5f9', '#e2e8f0');
       
       doc.fontSize(10)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
          .text('Question', leftMargin + 10, tableHeaderY + 5)
-         .text('Response', leftMargin + questionColWidth + 10, tableHeaderY + 5);
+         .text('Response', leftMargin + questionColWidth + 10, tableHeaderY + 5)
+         .text('Score', leftMargin + questionColWidth + responseColWidth + 10, tableHeaderY + 5);
       
       yPos += 25;
       
       // Questions and responses
       questions.forEach((question, index) => {
-        ensureSpace(40);
+        ensureSpace(60);
         
         const rowBgColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
         const rowY = yPos;
@@ -1139,18 +1116,35 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
           align: 'left'
         });
         
-        const rowHeight = Math.max(30, questionTextHeight + 15);
+        const rowHeight = Math.max(40, questionTextHeight + 25);
         
         // Draw row background
         doc.rect(leftMargin, rowY, questionColWidth, rowHeight)
            .rect(leftMargin + questionColWidth, rowY, responseColWidth, rowHeight)
+           .rect(leftMargin + questionColWidth + responseColWidth, rowY, scoreColWidth, rowHeight)
            .fillAndStroke(rowBgColor, '#e2e8f0');
         
-        // Question text
+        // Breadcrumb path for question using the page and section info
+        let breadcrumb = category;
+        
+        if (question.page && question.section) {
+          breadcrumb = `${category} › Page ${question.page} › ${question.section}`;
+        } else if (question.section) {
+          breadcrumb = `${category} › ${question.section}`;
+        } else if (question.page) {
+          breadcrumb = `${category} › Page ${question.page}`;
+        }
+        
+        // Question text with breadcrumb
+        doc.fontSize(8)
+           .fillColor(colors.secondary)
+           .font('Helvetica')
+           .text(breadcrumb, leftMargin + 10, rowY + 7);
+        
         doc.fontSize(9)
            .fillColor(colors.text)
            .font('Helvetica')
-           .text(question.text, leftMargin + 10, rowY + 7, {
+           .text(question.text, leftMargin + 10, rowY + 18, {
              width: questionColWidth - 20,
              align: 'left'
            });
@@ -1165,20 +1159,23 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
             case 'Yes':
             case 'full_compliance':
             case 'Full Compliance':
+            case 'Full compliance':
               responseColor = colors.green;
-              responseText = 'Yes / Full Compliance';
+              responseText = 'Full compliance';
               break;
             case 'no':
             case 'No':
             case 'non_compliance':
             case 'Non Compliance':
+            case 'Non compliance':
               responseColor = colors.red;
-              responseText = 'No / Non-Compliance';
+              responseText = 'Non compliance';
               break;
             case 'partial_compliance':
             case 'Partial Compliance':
+            case 'Partial compliance':
               responseColor = colors.amber;
-              responseText = 'Partial Compliance';
+              responseText = 'Partial compliance';
               break;
             case 'not_applicable':
             case 'Not Applicable':
@@ -1193,21 +1190,38 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
           }
           
           // Draw response badge
-          doc.roundedRect(leftMargin + questionColWidth + 10, rowY + 5, responseColWidth - 20, 20, 5)
+          doc.roundedRect(leftMargin + questionColWidth + 10, rowY + 10, responseColWidth - 20, 20, 5)
              .fillAndStroke(responseColor, responseColor);
           
           doc.fontSize(9)
              .fillColor('white')
              .font('Helvetica-Bold')
-             .text(responseText, leftMargin + questionColWidth + 15, rowY + 10, {
+             .text(responseText, leftMargin + questionColWidth + 15, rowY + 15, {
                width: responseColWidth - 30,
                align: 'center'
              });
         } else {
           doc.fontSize(9)
              .fillColor(colors.lightText)
-             .font('Helvetica-Oblique')
-             .text('No response', leftMargin + questionColWidth + 10, rowY + 10);
+             .font('Helvetica')
+             .text('No response', leftMargin + questionColWidth + 10, rowY + 15);
+        }
+        
+        // Score section
+        if (question.isNA) {
+          doc.fontSize(9)
+             .fillColor(colors.text)
+             .font('Helvetica')
+             .text('N/A', 
+                 leftMargin + questionColWidth + responseColWidth + (scoreColWidth / 2) - 10, 
+                 rowY + 15);
+        } else {
+          doc.fontSize(9)
+             .fillColor(colors.text)
+             .font('Helvetica-Bold')
+             .text(`${question.earned} / ${question.max}`, 
+                 leftMargin + questionColWidth + responseColWidth + (scoreColWidth / 2) - 15, 
+                 rowY + 15);
         }
         
         yPos += rowHeight;
@@ -1232,7 +1246,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
       });
       
       yPos += 15;
-    }
+    });
   }
   
   // Flagged items section
@@ -1251,10 +1265,10 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
        .rect(leftMargin + categoryColWidth, tableHeaderY, itemColWidth, 20)
        .rect(leftMargin + categoryColWidth + itemColWidth, tableHeaderY, statusColWidth, 20)
        .rect(leftMargin + categoryColWidth + itemColWidth + statusColWidth, tableHeaderY, notesColWidth, 20)
-       .fillAndStroke(colors.primary, colors.primary);
+       .fillAndStroke('#e0e7ff', '#c7d2fe');
     
     doc.fontSize(10)
-       .fillColor('white')
+       .fillColor(colors.primary)
        .font('Helvetica-Bold')
        .text('Category', leftMargin + 10, tableHeaderY + 5)
        .text('Item', leftMargin + categoryColWidth + 10, tableHeaderY + 5)
@@ -1289,21 +1303,26 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
       
       // Status with color indicator
       let statusColor;
+      let statusText;
       switch (item.status) {
         case 'full_compliance':
         case 'Full Compliance':
           statusColor = colors.green;
+          statusText = 'Complete';
           break;
         case 'partial_compliance':
         case 'Partial Compliance':
           statusColor = colors.amber;
+          statusText = 'In Progress';
           break;
         case 'not_applicable':
         case 'Not Applicable':
           statusColor = colors.gray;
+          statusText = 'N/A';
           break;
         default:
           statusColor = colors.red;
+          statusText = 'Incomplete';
       }
       
       const statusX = leftMargin + categoryColWidth + itemColWidth + 5;
@@ -1316,7 +1335,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
       doc.fontSize(8)
          .fillColor('white')
          .font('Helvetica-Bold')
-         .text(item.status || 'N/A', statusX + 5, statusY + 5, { width: statusWidth - 10, align: 'center' });
+         .text(statusText, statusX + 5, statusY + 5, { width: statusWidth - 10, align: 'center' });
       
       // Notes
       doc.fontSize(9)
@@ -1335,42 +1354,115 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
   ensureSpace(100);
   drawSectionHeader('Sign-off');
   
-  // Inspector signature
-  doc.fontSize(10)
-     .fillColor(colors.text)
-     .font('Helvetica-Bold')
-     .text('Inspector Signature:', leftMargin, yPos);
+  // Add the signature if available
+  if (task.signature) {
+    ensureSpace(80);
+    
+    doc.fontSize(10)
+       .fillColor(colors.text)
+       .font('Helvetica-Bold')
+       .text('Inspector Signature:', leftMargin, yPos);
+    
+    yPos += 20;
+    
+    // Draw signature frame with background
+    doc.rect(leftMargin, yPos, contentWidth * 0.45, 60)
+       .fillAndStroke('#ffffff', '#e2e8f0');
+       
+    try {
+      // If signature is base64, we can display it directly
+      if (task.signature.startsWith('data:image')) {
+        doc.image(task.signature, leftMargin + 10, yPos + 5, { 
+          width: contentWidth * 0.4,
+          height: 50,
+          fit: [contentWidth * 0.4, 50]
+        });
+      } else {
+        // Otherwise just show a text placeholder
+        doc.fontSize(9)
+           .fillColor(colors.lightText)
+           .font('Helvetica')
+           .text('Digital signature applied', leftMargin + 20, yPos + 25);
+      }
+    } catch (err) {
+      // If signature image fails, use text
+      doc.fontSize(9)
+         .fillColor(colors.lightText)
+         .font('Helvetica')
+         .text('Digital signature applied', leftMargin + 20, yPos + 25);
+    }
+    
+    // Add signed by and date if available
+    if (task.signedBy && task.signedBy.name) {
+      doc.fontSize(9)
+         .fillColor(colors.text)
+         .font('Helvetica')
+         .text(`Signed by: ${task.signedBy.name}`, leftMargin, yPos + 70);
+    }
+    
+    if (task.signedAt) {
+      doc.fontSize(9)
+         .fillColor(colors.text)
+         .font('Helvetica')
+         .text(`Date: ${new Date(task.signedAt).toLocaleString()}`, 
+               task.signedBy && task.signedBy.name ? leftMargin + 200 : leftMargin, 
+               yPos + 70);
+    }
+    
+    yPos += 100;
+  } else {
+    // No signature available, show placeholders
+    // Inspector signature
+    doc.fontSize(10)
+       .fillColor(colors.text)
+       .font('Helvetica-Bold')
+       .text('Inspector Signature:', leftMargin, yPos);
+    
+    yPos += 20;
+    
+    doc.rect(leftMargin, yPos, contentWidth * 0.45, 40)
+       .fillAndStroke('#ffffff', '#e2e8f0');
+    
+    doc.fontSize(9)
+       .fillColor(colors.lightText)
+       .font('Helvetica')
+       .text('Awaiting signature', leftMargin + 20, yPos + 15);
+    
+    // Person in charge signature
+    doc.fontSize(10)
+       .fillColor(colors.text)
+       .font('Helvetica-Bold')
+       .text('Person in Charge Signature:', leftMargin + contentWidth * 0.55, yPos - 20);
+    
+    doc.rect(leftMargin + contentWidth * 0.55, yPos, contentWidth * 0.45, 40)
+       .fillAndStroke('#ffffff', '#e2e8f0');
+    
+    doc.fontSize(9)
+       .fillColor(colors.lightText)
+       .font('Helvetica')
+       .text('Awaiting signature', leftMargin + contentWidth * 0.55 + 20, yPos + 15);
+    
+    yPos += 50;
+    
+    // Date line
+    doc.fontSize(10)
+       .fillColor(colors.text)
+       .font('Helvetica-Bold')
+       .text('Date:', leftMargin, yPos);
+    
+    doc.moveTo(leftMargin + 35, yPos + 12)
+       .lineTo(leftMargin + 150, yPos + 12)
+       .stroke('#e2e8f0');
+  }
   
-  yPos += 20;
-  
-  doc.rect(leftMargin, yPos, contentWidth * 0.45, 40)
-     .stroke('#e2e8f0');
-  
-  // Person in charge signature
-  doc.fontSize(10)
-     .fillColor(colors.text)
-     .font('Helvetica-Bold')
-     .text('Person in Charge Signature:', leftMargin + contentWidth * 0.55, yPos - 20);
-  
-  doc.rect(leftMargin + contentWidth * 0.55, yPos, contentWidth * 0.45, 40)
-     .stroke('#e2e8f0');
-  
-  yPos += 50;
-  
-  // Date line
-  doc.fontSize(10)
-     .fillColor(colors.text)
-     .font('Helvetica-Bold')
-     .text('Date:', leftMargin, yPos);
-  
-  doc.moveTo(leftMargin + 35, yPos + 12)
-     .lineTo(leftMargin + 150, yPos + 12)
-     .stroke('#e2e8f0');
-  
-  // Add page numbers
+  // Add page numbers and footer
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
+    
+    // Add footer background
+    doc.rect(0, doc.page.height - 30, doc.page.width, 30)
+       .fillAndStroke('#f8fafc', '#f8fafc');
     
     // Add time generated on bottom left
     doc.fontSize(8)
@@ -1379,7 +1471,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
        .text(
          `Generated on ${new Date().toLocaleString()}`,
          leftMargin,
-         doc.page.height - 30,
+         doc.page.height - 20,
          { align: 'left', width: contentWidth / 2 }
        );
     
@@ -1390,7 +1482,7 @@ async function generateTaskPDFContent(doc: PDFKit.PDFDocument, task: any): Promi
        .text(
          `Page ${i + 1} of ${range.count}`,
          leftMargin + contentWidth / 2,
-         doc.page.height - 30,
+         doc.page.height - 20,
          { align: 'right', width: contentWidth / 2 }
        );
   }
