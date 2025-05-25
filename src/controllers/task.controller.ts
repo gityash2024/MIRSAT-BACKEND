@@ -6,6 +6,7 @@ import { catchAsync } from '../utils/catchAsync';
 import { uploadService } from '../services/upload.service';
 import { notificationService } from '../services/notification.service';
 import InspectionLevel from '../../src/models/InspectionLevel';
+import { logger } from '../utils/logger';
 
 export const deleteTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const task = await Task.findById(req.params.id);
@@ -23,9 +24,30 @@ export const deleteTask = catchAsync(async (req: Request, res: Response, next: N
 });
 
 export const createTask = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  let { title, description, assignedTo, priority, deadline, location, attachments, inspectionLevel, asset, preInspectionQuestions } = req.body;
+  const { 
+    title, 
+    description, 
+    assignedTo, 
+    priority, 
+    deadline, 
+    location, 
+    attachments, 
+    inspectionLevel, 
+    asset, 
+    preInspectionQuestions 
+  } = req.body;
 
+  if (!title) {
+    return next(new ApiError('Title is required', 400));
+  }
+
+  if (!assignedTo || !Array.isArray(assignedTo) || assignedTo.length === 0) {
+    return next(new ApiError('At least one assignee is required', 400));
+  }
+
+  // Get all users to be assigned
   const users = await User.find({ _id: { $in: assignedTo }, isActive: true });
+  
   if (users.length !== assignedTo.length) {
     return next(new ApiError('One or more assigned users are invalid or inactive', 400));
   }
@@ -86,19 +108,32 @@ export const createTask = catchAsync(async (req: Request, res: Response, next: N
     .populate('createdBy', 'name email')
     .populate('asset', 'uniqueId type displayName');  // Populate the asset field
 
+  // Store the data in res.locals so error middleware can access it if needed
+  res.locals.data = populatedTask;
+
   // Send notifications to all assigned users
-  for (const user of users) {
-    await notificationService.create({
-      recipient: user._id,
-      type: 'TASK_ASSIGNED',
-      title: 'New Task Assigned',
-      message: `You have been assigned to the task: ${title}`,
-      data: {
-        taskId: newTask._id,
-        priority: priority,
-        link: `/tasks/${newTask._id}`
-      }
-    });
+  // Use a try-catch block to ensure task creation succeeds even if notifications fail
+  try {
+    const notificationPromises = users.map(user => 
+      notificationService.create({
+        recipient: user._id,
+        type: 'TASK_ASSIGNED',
+        title: 'New Task Assigned',
+        message: `You have been assigned to the task: ${title}`,
+        data: {
+          taskId: newTask._id,
+          priority: priority,
+          link: `/tasks/${newTask._id}`
+        }
+      })
+    );
+    
+    // Use Promise.allSettled to ensure all notification attempts complete
+    // without failing the entire operation
+    await Promise.allSettled(notificationPromises);
+  } catch (error) {
+    // Just log the error but continue with task creation
+    logger.error('Error sending task assignment notifications:', error);
   }
 
   res.status(201).json({

@@ -3,20 +3,36 @@ import { logger } from '../utils/logger';
 
 class EmailService {
   private transporter: nodemailer.Transporter;
+  private emailEnabled: boolean;
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    // Check if email is enabled via environment variable
+    this.emailEnabled = process.env.ENABLE_EMAIL_NOTIFICATIONS === 'true';
+    
+    // Set up the transporter even if emails are disabled (to avoid errors)
+    try {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to create email transporter:', error);
+      this.emailEnabled = false;
+    }
   }
 
   async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    // Skip sending if emails are disabled
+    if (!this.emailEnabled) {
+      logger.info(`Email sending skipped (disabled): ${subject} to ${to}`);
+      return;
+    }
+
     try {
       const mailOptions = {
         from: process.env.SMTP_FROM,
@@ -29,7 +45,8 @@ class EmailService {
       logger.info(`Email sent successfully to ${to}`);
     } catch (error) {
       logger.error('Error sending email:', error);
-      throw new Error('Failed to send email');
+      // Log the error but don't throw it - this allows the application to continue
+      logger.warn(`Failed to send email to ${to}, but continuing execution`);
     }
   }
 

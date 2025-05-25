@@ -10,6 +10,7 @@ interface ExtendedError extends Error {
   limit?: number;
   length?: number;
   expected?: boolean;
+  isEmailError?: boolean;
 }
 
 export const errorHandler = (
@@ -17,11 +18,35 @@ export const errorHandler = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   let error = err as ExtendedError;
 
   // Log error
   logger.error('Error 💥:', err);
+
+  // Handle email service errors specially
+  if (error.message === 'Failed to send email') {
+    error.isEmailError = true;
+    
+    // If this is a task creation or update endpoint, don't fail the operation
+    if (req.originalUrl.includes('/tasks') && (req.method === 'POST' || req.method === 'PUT')) {
+      logger.warn('Email service error encountered, but continuing operation');
+      res.status(201).json({
+        success: true,
+        message: 'Operation completed successfully, but email notifications could not be sent',
+        data: res.locals.data || {}
+      });
+      return;
+    }
+    
+    // For other routes, return a 200 with a warning
+    res.status(200).json({
+      success: true,
+      warning: 'Operation completed, but email notifications could not be sent',
+      data: res.locals.data || {}
+    });
+    return;
+  }
 
   // Handle payload too large error from express-json
   if ((error as any).type === 'entity.too.large') {
