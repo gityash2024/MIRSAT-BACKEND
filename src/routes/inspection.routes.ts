@@ -22,8 +22,7 @@ const router = Router();
 router.use(protect);
 
 router.route('/')
-  .post( createInspectionLevel)
-  // .post(hasPermission('create_inspections'), createInspectionLevel)
+  .post(hasPermission('create_inspections'), createInspectionLevel)
   .get(getInspectionLevels);
 
 router.route('/:id')

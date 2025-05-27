@@ -201,7 +201,7 @@ const inspectionLevelSchema = new Schema<IInspectionLevel>({
   description: { type: String, required: true },
   type: { 
     type: String, 
-    required: true,
+ 
   },
   status: {
     type: String,
